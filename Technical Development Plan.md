@@ -137,6 +137,8 @@ The platform's security model is centered around JWTs for stateless authenticati
      * **Access Token:** A short-lived JWT (e.g., 15-minute expiry) containing claims such as user\_id, exp (expiration time), iat (issued at), and iss (issuer).34 This token is used to authenticate subsequent API requests.  
      * **Refresh Token:** A long-lived, opaque token stored in the database and sent to the client (typically in a secure, HttpOnly cookie). This token is used to obtain a new access token without requiring the user to log in again.  
 * **Token Validation Flow:**  
+
+
   1. The frontend client includes the access token in the Authorization: Bearer \<token\> header of every protected API request.  
   2. The API Gateway intercepts the request and inspects the header.  
   3. It validates the token's signature using the public key of the auth-service. It also verifies that the token is not expired and was issued by the correct authority (iss claim).34  
@@ -144,6 +146,9 @@ The platform's security model is centered around JWTs for stateless authenticati
   5. If the token is invalid or expired, the gateway immediately rejects the request with a 401 Unauthorized status.  
 * **Security Best Practices:**  
   * The signing key for the JWTs will be a strong, randomly generated secret (for HS256) or a private key (for RS256) and will be managed securely via environment variables or a secret management system. It will never be hardcoded in the source code.34  
+  
+#### MVP Authentication Reconciliation
+For the single-user MVP, the public endpoints under /api/v1/auth are stubbed and the API Gateway enforces a simple login gate using a hardcoded admin credential matching the PRD. JWT issuance/validation and multi-user flows (register, refresh) are scaffolded but disabled in production builds until multi-user is introduced. This preserves the JWT-compatible architecture while keeping the MVP operational simplicity.
   * All communication between the client, gateway, and services will be encrypted using TLS.
 
 ### **F. System Observability: A Framework for Logging, Tracing, and Metrics**
@@ -281,6 +286,13 @@ A fully automated CI/CD pipeline is essential for achieving development velocity
 * **Continuous Deployment (CD):** This stage will be triggered by a merge into the main branch.  
   1. **Deploy to Staging:** The newly built container image will be automatically deployed to a dedicated staging environment that mirrors production. Automated end-to-end tests can be run against this environment.  
   2. **Manual Promotion to Production:** The pipeline will pause for a manual approval step before deploying to the production environment. This provides a final gate for quality assurance and allows for deployments to be scheduled during low-traffic periods. The deployment to production will use a rolling update strategy to ensure zero downtime.
+  
+### **C. Secrets and Configuration Management**
+- Tooling: Use sops + age for encrypting configuration files in-repo, and Kubernetes Secrets (or Docker Compose env files for local) for runtime injection. For cloud or future scaling, integrate with HashiCorp Vault or AWS Secrets Manager; interface via environment variables at runtime.
+- Local Development: Provide .env.example files; actual .env kept out of VCS. Use docker-compose to inject env vars into services. For encrypted values, maintain config.enc.yaml managed by sops; decrypt during CI with repository-level age key.
+- CI/CD: Store sensitive values as encrypted GitHub Actions secrets. CI jobs pass secrets as env vars to build/deploy steps only. Never commit secrets or keys.
+- Rotation: Document key rotation procedures and short TTLs for API keys. Prefer per-environment credentials.
+- Access Controls: Principle of least privilege for API keys (Alchemy, Moralis, CoinGecko). Network egress restricted at cluster level where applicable.
 
 ## **VI. Implementation Roadmap and Strategic Recommendations**
 
@@ -296,6 +308,7 @@ The development will be structured in four distinct phases, allowing for iterati
     * Implement the auth-service, including user registration, login, and JWT generation/validation logic.  
     * Scaffold the api-gateway with basic request routing and JWT authentication middleware.  
     * Define and implement the initial PostgreSQL database schemas for all microservices using a migration tool.  
+    * Migration Tool: Use golang-migrate (migrate) for schema versioning across services. Rationale: widely adopted in Go ecosystems, simple CLI/CI usage, supports PostgreSQL, reversible up/down migrations, and works well with containerized workflows. Migrations are stored per service under db/migrations with numbered up/down files and applied via CI and on container startup with idempotent execution.
     * Set up the foundational CI/CD pipeline to automate testing and container builds for the initial services.  
     * Establish the baseline Kubernetes configuration for deploying the core services.  
 * **Phase 2: Data Ingestion and Processing (Weeks 5-8)**  
@@ -381,3 +394,22 @@ The development will be structured in four distinct phases, allowing for iterati
 50. Coin Price by IDs \- CoinGecko API, accessed on October 9, 2025, [https://docs.coingecko.com/reference/simple-price](https://docs.coingecko.com/reference/simple-price)  
 51. Token Price by Token Addresses \- CoinGecko API, accessed on October 9, 2025, [https://docs.coingecko.com/v3.0.1/reference/onchain-simple-price](https://docs.coingecko.com/v3.0.1/reference/onchain-simple-price)  
 52. Coin Price by Token Addresses \- CoinGecko API, accessed on October 9, 2025, [https://docs.coingecko.com/v3.0.1/reference/simple-token-price](https://docs.coingecko.com/v3.0.1/reference/simple-token-price)
+### MVP vs Future State: Authentication
+
+- MVP (single-user): The API Gateway enforces a hardcoded admin login that matches the PRD. JWT issuance/validation and user registration are scaffolded but not active in runtime. No dependency on the auth-service database at runtime for login.  
+- Future (multi-user): Enable auth-service and the full JWT flow (register/login/refresh). Gateway and services enforce JWT middleware.  
+- Feature Flag: ENABLE_MULTI_USER=false for MVP; set to true to activate the multi-user stack.
+
+#### Users Table Treatment in MVP
+- The auth-service users table is future-state in the MVP. Do not couple runtime flows to it while ENABLE_MULTI_USER=false.  
+- Optionally seed a single admin user when transitioning to multi-user for consistency and migration testing.
+
+### Ingestion Responsibilities: Historical Top Holders
+### Chain Support Scope
+
+- Phase 1 includes Solana in addition to EVM chains. Address validators, ingestion pipelines, and market data integrations must handle Solana.
+- OpenAPI reflects EVM and Solana via oneOf address patterns; Solana-specific provider notes are included in integration sections.
+
+- The ingestion-service runs periodic snapshot jobs to persist top holders over time for configured tokens:
+  - holder_snapshots: id BIGSERIAL PK, token_address TEXT, holder_address TEXT, balance NUMERIC, rank INT, timestamp TIMESTAMPTZ.
+- Snapshots power historical analysis and trend detection in the portfolio-service.

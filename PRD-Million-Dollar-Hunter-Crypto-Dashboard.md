@@ -1,3 +1,5 @@
+
+
 # Million Hunter: Personal On-Chain Cryptocurrency Dashboard
 
 ### TL;DR
@@ -7,6 +9,8 @@ Million Hunter is a highly modular, web-based on-chain cryptocurrency dashboard 
 ---
 
 ## Goals
+
+
 
 ### Primary Objectives
 
@@ -180,6 +184,29 @@ The owner/operator of Million Hunter is a single individual who needs powerful, 
 
 ## Technical Considerations
 
+The platform consists of a lightweight Next.js frontend, a single public API Gateway, and a small set of backend services responsible for auth, portfolio aggregation, data ingestion, and market data. For the single-user MVP, the auth layer is simplified per Security: a hardcoded admin credential gates access at the API Gateway and frontend login screen. External data comes from Alchemy/Moralis for on-chain events and CoinGecko for prices. PostgreSQL persists normalized and read-optimized views; Redis caches hot reads and rate-limit state.
+
+Components and relationships:
+- Frontend (Next.js App Router): Presents dashboard UI, calls API Gateway over HTTPS. Stores no secrets.
+- API Gateway (REST): Single entry point. Enforces simple login gate for MVP; later validates JWTs. Handles rate limiting, request logging, and response aggregation.
+- Portfolio Service: Serves wallet, assets, holders, and historical snapshots from PostgreSQL. Reads cached prices from Market Data Service.
+- Ingestion Service: Fetches and normalizes on-chain data from Alchemy/Moralis. Writes raw data and triggers aggregation jobs.
+- Market Data Service: Pulls CoinGecko prices, caches in Redis, persists recent prices in PostgreSQL for durability.
+- PostgreSQL: Primary data store per service (logical schemas). Read models for fast dashboards.
+- Redis: Caching for rate limits, market prices, and frequently accessed queries.
+- External APIs: Alchemy/Moralis for chain data; CoinGecko for market data.
+
+Data flow:
+1) User searches a token or wallet in the frontend; request hits API Gateway.
+2) Gateway routes read requests to Portfolio Service, which enriches with prices via Market Data.
+3) When tracking a new wallet/token, Portfolio Service emits a job; Ingestion Service fetches history and updates read models.
+4) Market Data Service periodically refreshes prices and invalidates relevant caches.
+### Solana Scope
+
+- Solana is included in Phase 1 (MVP) alongside EVM chains.
+- All wallet-address inputs and related endpoints must accept Solana base58 addresses in addition to EVM 0x addresses.
+- Data providers and ingestion flows include Solana where applicable.
+
 ### Platform Architecture
 
 ### Data Handling & Privacy
@@ -206,8 +233,37 @@ The owner/operator of Million Hunter is a single individual who needs powerful, 
 
 ## Milestones & Phasing
 
+A realistic AI-assisted delivery plan is phased for rapid MVP and incremental hardening.
+
+Phase 0 (Day 0–1): Repo scaffolding and owner secrets
+- Initialize monorepo structure, docs, and local docker-compose.
+- Configure environment templates and secret placeholders.
+
+Phase 1 (Week 1): MVP core with single-user gate
+- Implement login screen with hardcoded admin credential.
+- Implement token search UI, basic analytics placeholders.
+- Wire API Gateway with read-only endpoints returning mocked data.
+
+Phase 2 (Weeks 2–3): Data integrations and persistence
+- Integrate CoinGecko price fetch and Redis cache.
+- Integrate Alchemy (primary) for transfers; normalize into PostgreSQL.
+- Build portfolio read models and top holders views.
+
+Phase 3 (Weeks 4–5): Monitoring, caching, and exports
+- Add Prometheus metrics, basic dashboards, alert thresholds.
+- Implement CSV/JSON export and pagination across key lists.
+- Harden rate limiting and error handling paths.
+
+Phase 4 (Week 6): Hardening and polish
+- Performance tuning (API p95 targets), UX refinements, accessibility pass.
+- Documentation completeness, runbook, and operational checklists.
 ### Project Timeline
 
+- Owner/Operator: Sets priorities, manages tracked wallets/tokens, consumes insights, and approves deployments.
+- AI Delivery Agent(s): Implements features end-to-end per plan, executes CI/CD, maintains docs, and monitors health.
+- Backend Service Role: Provides portfolio aggregation, ingestion jobs, and market data with clear SLAs.
+- Frontend Role: Delivers responsive dashboard, charts, alerts configuration, and export flows.
+- Ops Role (agent-operated): Ensures observability, backups, rate limit budgets, and incident response.
 ### Team & Roles
 
 * **AI Agent-Orchestrated Solo Delivery:** No other team members or multi-person coordination. All roadmap items and iterations are implemented by agents and guided directly by the owner/operator.
@@ -220,6 +276,18 @@ The owner/operator of Million Hunter is a single individual who needs powerful, 
 
 ---
 
+| Area | Decision/Plan | Notes |
+|---|---|---|
+| Access Model | Single-user with hardcoded admin credential (MVP) | Upgrade path to JWT when multi-user needed |
+| Frontend | Next.js App Router | MUI components, TradingView charts |
+| Backend | API Gateway + microservices | Portfolio, Ingestion, Market Data |
+| Data Stores | PostgreSQL + Redis | Read-optimized views; cache for prices/rate limits |
+| External APIs | Alchemy, Moralis, CoinGecko | Respect rate limits; caching and backoff |
+| Security | Minimal login gate (MVP); TLS everywhere | No PII; exports on-demand |
+| Observability | Prometheus metrics, structured logs | Dashboards and alerts for p95 latency, errors |
+| Deployment | Docker; later Kubernetes | Local dev via Docker Compose |
+| Timeline | 6 weeks total, phased | AI-assisted delivery |
+| Exports | CSV/JSON | Manual, owner-initiated |
 ## Summary Table
 
 ---
