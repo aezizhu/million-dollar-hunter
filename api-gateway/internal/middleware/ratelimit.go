@@ -29,23 +29,27 @@ func RateLimit(l Limiter) gin.HandlerFunc {
 		c.Header(headerRateRemaining, strconv.Itoa(remaining))
 		c.Header(headerRateReset, strconv.FormatInt(reset.Unix(), 10))
 		if !allowed {
-			if m, ok := c.MustGet("http_metrics").(*observability.HTTPMetrics); ok && m != nil {
-				route := key
-				if route == "" {
-					route = c.Request.URL.Path
+			if v, exists := c.Get("http_metrics"); exists {
+				if m, ok := v.(*observability.HTTPMetrics); ok && m != nil {
+					route := key
+					if route == "" {
+						route = c.Request.URL.Path
+					}
+					m.RateLimitBlocked.WithLabelValues(route).Inc()
 				}
-				m.RateLimitBlocked.WithLabelValues(route).Inc()
 			}
 			c.Header(headerRetryAfter, strconv.Itoa(int(retry.Seconds())))
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate_limit", "message": "rate limit exceeded"})
 			return
 		}
-		if m, ok := c.MustGet("http_metrics").(*observability.HTTPMetrics); ok && m != nil {
-			route := key
-			if route == "" {
-				route = c.Request.URL.Path
+		if v, exists := c.Get("http_metrics"); exists {
+			if m, ok := v.(*observability.HTTPMetrics); ok && m != nil {
+				route := key
+				if route == "" {
+					route = c.Request.URL.Path
+				}
+				m.RateLimitAllowed.WithLabelValues(route).Inc()
 			}
-			m.RateLimitAllowed.WithLabelValues(route).Inc()
 		}
 		c.Next()
 	}
