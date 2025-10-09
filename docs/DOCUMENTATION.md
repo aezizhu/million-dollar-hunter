@@ -1,5 +1,13 @@
 # Documentation Index
 
+- [PRD - Crypto Dashboard](./PRD-Million-Dollar-Hunter-Crypto-Dashboard.md)
+- [Technical Development Plan](./Technical Development Plan.md)
+- [Security Hardening](./security-hardening.md)
+- [Database Migration Strategy](./database-migration-strategy.md)
+- [Auth Service](./auth-service.md)
+
+# Documentation Index
+
 Purpose: Quick navigation and guidance for when to use each document.
 
 ## Index

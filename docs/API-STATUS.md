@@ -21,6 +21,8 @@ Source: `openapi.yaml` - API Gateway (Agent B)
 **Implementation Notes**:
 - MVP uses hardcoded credentials: username `aezi`, password `Aa@123456789`
 - JWT generation/validation scaffolded but disabled in MVP
+- auth-service REST login endpoint available at `/api/v1/auth/login` (MVP hardcoded check; returns JWT pair). gRPC `auth.proto` defined under `services/auth-service/api/auth.proto`.
+
 - Registration endpoint stubbed for future multi-user support
 
 ---

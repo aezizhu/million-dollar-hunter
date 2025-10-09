@@ -1,0 +1,56 @@
+package httpapi
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+	"time"
+)
+
+type fakeJWT struct{}
+
+func (f *fakeJWT) GeneratePair(userID, email string) (string, string, time.Time, error) {
+	return "access", "refresh", time.Now().Add(1 * time.Minute), nil
+}
+
+func TestHealth(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	w := httptest.NewRecorder()
+	s.Health(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200")
+	}
+}
+
+func TestLoginMVP(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "false")
+	s := &Server{JWT: &fakeJWT{}}
+	body, _ := json.Marshal(LoginRequest{Username: "aezi", Password: "Aa@123456789"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp LoginResponse
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	if resp.AccessToken == "" || resp.RefreshToken == "" {
+		t.Fatalf("tokens missing")
+	}
+}
+
+func TestLoginUnauthorized(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "false")
+	s := &Server{JWT: &fakeJWT{}}
+	body, _ := json.Marshal(LoginRequest{Username: "bad", Password: "nope"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+	}
+}
