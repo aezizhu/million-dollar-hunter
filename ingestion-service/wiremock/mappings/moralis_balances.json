@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/moralis/api/wallets/.+/balances.*"
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": [
+      { "token": "0xToken", "symbol": "TKN", "amount": "100", "usd": 10.0 }
+    ],
+    "headers": { "Content-Type": "application/json" }
+  }
+}

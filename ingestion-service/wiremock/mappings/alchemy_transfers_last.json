@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPattern": "/alchemy/.+",
+    "bodyPatterns": [
+      { "contains": "\"pageKey\":\"next\"" }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": {
+      "result": {
+        "transfers": [
+          { "hash": "0x2", "from": "0xA", "to": "0xC", "value": "2" }
+        ],
+        "pageKey": ""
+      }
+    },
+    "headers": { "Content-Type": "application/json" }
+  }
+}
