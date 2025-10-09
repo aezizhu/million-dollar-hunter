@@ -80,11 +80,25 @@ func (m *Manager) ValidateToken(tokenStr string, expectedAud string) (*Claims, e
 		return nil, errors.New("invalid issuer")
 	}
 	if expectedAud != "" {
-		if !claims.Audience.Contains(expectedAud) {
+		found := false
+		for _, aud := range claims.Audience {
+			if aud == expectedAud {
+				found = true
+				break
+			}
+		}
+		if !found {
 			return nil, errors.New("invalid audience")
 		}
 	}
-	if !claims.Audience.Contains(m.audience) {
+	foundCfg := false
+	for _, aud := range claims.Audience {
+		if aud == m.audience {
+			foundCfg = true
+			break
+		}
+	}
+	if !foundCfg {
 		return nil, errors.New("invalid audience")
 	}
 	return claims, nil
