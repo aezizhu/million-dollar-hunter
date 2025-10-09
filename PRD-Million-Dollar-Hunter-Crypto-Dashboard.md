@@ -1,3 +1,5 @@
+
+
 # Million Hunter: Personal On-Chain Cryptocurrency Dashboard
 
 ### TL;DR
@@ -7,6 +9,8 @@ Million Hunter is a highly modular, web-based on-chain cryptocurrency dashboard 
 ---
 
 ## Goals
+
+
 
 ### Primary Objectives
 
@@ -197,6 +201,12 @@ Data flow:
 2) Gateway routes read requests to Portfolio Service, which enriches with prices via Market Data.
 3) When tracking a new wallet/token, Portfolio Service emits a job; Ingestion Service fetches history and updates read models.
 4) Market Data Service periodically refreshes prices and invalidates relevant caches.
+### Solana Scope
+
+- Solana is included in Phase 1 (MVP) alongside EVM chains.
+- All wallet-address inputs and related endpoints must accept Solana base58 addresses in addition to EVM 0x addresses.
+- Data providers and ingestion flows include Solana where applicable.
+
 ### Platform Architecture
 
 ### Data Handling & Privacy

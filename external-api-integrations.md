@@ -23,14 +23,14 @@ Providers: Alchemy, Moralis, CoinGecko.
 - Record usage metrics (requests, cache hits, retries) to Prometheus; alert at 80/90/100% of budget.
 
 ### Monthly Budget Limits (MVP)
-- Alchemy: $TBD/month (≈ Y req/day)
-- Moralis: $TBD/month (≈ Y req/day)
-- CoinGecko: Free tier (Z req/minute)
+- Free APIs: No cap (e.g., CoinGecko free tier).
+- Paid APIs (e.g., Alchemy, Moralis): Caps are user-managed via environment variables:
+  - BUDGET_CAP_ALCHEMY_USD, BUDGET_CAP_MORALIS_USD (optional). If unset, alerts use forecast-only, no enforced cap.
 
 ### Cost Tracking Implementation
 - Redis counter: api:budget:{provider}:{YYYY-MM}
 - Prometheus metric: external_api_estimated_cost{provider="alchemy"}
-- Alerts: thresholds at 80%, 90%, 100% of monthly cap
+- Alerts: thresholds at 80%, 90%, 100% of monthly cap (if cap provided); otherwise alert on forecast crossing $ thresholds configured via env (e.g., BUDGET_WARN_USD, BUDGET_CRIT_USD)
 
 ## Data Freshness
 - Prices TTL: 60s; token holders refresh: 5–10 minutes configurable.

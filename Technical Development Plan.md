@@ -137,6 +137,8 @@ The platform's security model is centered around JWTs for stateless authenticati
      * **Access Token:** A short-lived JWT (e.g., 15-minute expiry) containing claims such as user\_id, exp (expiration time), iat (issued at), and iss (issuer).34 This token is used to authenticate subsequent API requests.  
      * **Refresh Token:** A long-lived, opaque token stored in the database and sent to the client (typically in a secure, HttpOnly cookie). This token is used to obtain a new access token without requiring the user to log in again.  
 * **Token Validation Flow:**  
+
+
   1. The frontend client includes the access token in the Authorization: Bearer \<token\> header of every protected API request.  
   2. The API Gateway intercepts the request and inspects the header.  
   3. It validates the token's signature using the public key of the auth-service. It also verifies that the token is not expired and was issued by the correct authority (iss claim).34  
@@ -403,6 +405,11 @@ The development will be structured in four distinct phases, allowing for iterati
 - Optionally seed a single admin user when transitioning to multi-user for consistency and migration testing.
 
 ### Ingestion Responsibilities: Historical Top Holders
+### Chain Support Scope
+
+- Phase 1 includes Solana in addition to EVM chains. Address validators, ingestion pipelines, and market data integrations must handle Solana.
+- OpenAPI reflects EVM and Solana via oneOf address patterns; Solana-specific provider notes are included in integration sections.
+
 - The ingestion-service runs periodic snapshot jobs to persist top holders over time for configured tokens:
   - holder_snapshots: id BIGSERIAL PK, token_address TEXT, holder_address TEXT, balance NUMERIC, rank INT, timestamp TIMESTAMPTZ.
 - Snapshots power historical analysis and trend detection in the portfolio-service.
