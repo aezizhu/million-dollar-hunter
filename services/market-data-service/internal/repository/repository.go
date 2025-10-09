@@ -120,7 +120,9 @@ func (r *Repository) SaveMultipleTokenPrices(ctx context.Context, prices []*Toke
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	stmt, err := tx.PrepareContext(ctx, `
 		INSERT INTO token_prices (token_address, chain, usd_price, market_cap, volume_24h, price_change_24h, last_updated)
