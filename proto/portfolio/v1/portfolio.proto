@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package portfolio.v1;
 
-option go_package = "github.com/aezizhu/million-dollar-hunter/proto/portfolio/v1;v1";
+option go_package = "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1;v1";
 
 service PortfolioService {
   rpc GetPortfolio(GetPortfolioRequest) returns (GetPortfolioResponse);
