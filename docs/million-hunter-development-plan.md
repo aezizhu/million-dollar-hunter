@@ -14,17 +14,38 @@ This development plan outlines the complete agent-orchestrated delivery strategy
 
 ## Agent Team Structure
 
-### Recommended Agent Count: **6 Specialized Engineer Agents**
+### Recommended Agent Count: **6 Specialized Engineer Agents (A-F)**
 
 The optimal team composition consists of six specialized AI engineer agents, each with distinct domain expertise and clear boundaries of responsibility. This structure balances the complexity of the microservices architecture with efficient parallel development while minimizing inter-agent coordination overhead.
+
+**Agent Designations:**
+- **Agent A** - Authentication & Security Engineer
+- **Agent B** - API Gateway & Orchestration Engineer
+- **Agent C** - Portfolio & Aggregation Engineer
+- **Agent D** - Data Ingestion Engineer
+- **Agent E** - Market Data Engineer
+- **Agent F** - Frontend & Visualization Engineer
 
 ---
 
 ## Agent Roles & Feature Assignments
 
-### **Agent 1: Authentication & Security Engineer**
+### **Agent A: Authentication & Security Engineer**
 **Domain:** User identity, security infrastructure, and access control  
 **Primary Responsibility:** auth-service and security hardening
+
+#### Required Documentation:
+**Must Read:**
+- `docs/PRD-Million-Dollar-Hunter-Crypto-Dashboard.md` - Sections: Goals, Security, Technical Considerations
+- `docs/Technical Development Plan.md` - Section II.E: Security Architecture (JWT Implementation)
+- `docs/security-hardening.md` - Complete document
+- `docs/database-migration-strategy.md` - For auth-service schema migrations
+- `docs/AGENT-HANDOFF.md` - Handoff protocol
+
+**Reference as Needed:**
+- `docs/openapi.yaml` - Auth endpoints specification
+- `docs/testing-strategy.md` - Auth test requirements
+- `docs/architecture-decisions.md` - JWT and auth decisions
 
 #### Core Features:
 1. **User Authentication System**
@@ -73,14 +94,29 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - gRPC service definition (.proto files)
 
 #### Dependencies:
-- Requires API Gateway scaffold from Agent 2
-- Coordinates with Agent 6 for frontend auth flow integration
+- Requires API Gateway scaffold from Agent B
+- Coordinates with Agent F for frontend auth flow integration
 
 ---
 
-### **Agent 2: API Gateway & Orchestration Engineer**
+### **Agent B: API Gateway & Orchestration Engineer**
 **Domain:** API routing, request aggregation, and cross-cutting concerns  
 **Primary Responsibility:** api-gateway service and public API contracts
+
+#### Required Documentation:
+**Must Read:**
+- `docs/PRD-Million-Dollar-Hunter-Crypto-Dashboard.md` - Complete document for functional requirements
+- `docs/Technical Development Plan.md` - Section II: Backend Development (focus on Gateway pattern)
+- `docs/openapi.yaml` - Complete REST API specification (PRIMARY REFERENCE)
+- `docs/external-api-integrations.md` - Rate limiting algorithms and budget tracking
+- `docs/monitoring-alerting.md` - Observability requirements
+- `docs/AGENT-HANDOFF.md` - Handoff protocol
+
+**Reference as Needed:**
+- `docs/performance-requirements.md` - API latency targets
+- `docs/testing-strategy.md` - Gateway testing requirements
+- `docs/operational-runbook.md` - Health checks and troubleshooting
+- `docs/architecture-decisions.md` - API Gateway pattern rationale
 
 #### Core Features:
 1. **API Gateway Service**
@@ -137,15 +173,30 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Load testing setup with k6/Locust
 
 #### Dependencies:
-- Consumes gRPC services from Agents 1, 3, 4, 5
-- Publishes events to Kafka (Agent 3's message broker)
-- Provides API surface for Agent 6's frontend
+- Consumes gRPC services from Agents A, C, D, E
+- Publishes events to Kafka (Agent C's message broker)
+- Provides API surface for Agent F's frontend
 
 ---
 
-### **Agent 3: Portfolio & Aggregation Engineer**
+### **Agent C: Portfolio & Aggregation Engineer**
 **Domain:** Portfolio management, wallet tracking, and data aggregation  
 **Primary Responsibility:** portfolio-service and CQRS read models
+
+#### Required Documentation:
+**Must Read:**
+- `docs/PRD-Million-Dollar-Hunter-Crypto-Dashboard.md` - Sections: Token Analytics, Wallet Monitoring, Top Holder Analysis
+- `docs/Technical Development Plan.md` - Section II.B: Microservice Decomposition (portfolio-service), Section II.D: Database Schemas
+- `docs/database-migration-strategy.md` - Schema versioning and migrations
+- `docs/architecture-decisions.md` - CQRS and Saga patterns
+- `docs/AGENT-HANDOFF.md` - Handoff protocol
+
+**Reference as Needed:**
+- `docs/openapi.yaml` - Portfolio endpoints specification
+- `docs/performance-requirements.md` - Query performance targets
+- `docs/testing-strategy.md` - Integration testing with Kafka
+- `docs/data-privacy-retention.md` - Data storage policies
+- `docs/frontend-components.md` - Data format requirements for UI
 
 #### Core Features:
 1. **Portfolio Service (CQRS Read Model)**
@@ -206,16 +257,31 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Integration tests with Testcontainers and test Kafka
 
 #### Dependencies:
-- Consumes data from Agent 4's ingestion-service (via Kafka)
-- Calls Agent 5's market-data-service for prices
-- Exposes API to Agent 2's gateway
-- Provides data for Agent 6's frontend visualizations
+- Consumes data from Agent D's ingestion-service (via Kafka)
+- Calls Agent E's market-data-service for prices
+- Exposes API to Agent B's gateway
+- Provides data for Agent F's frontend visualizations
 
 ---
 
-### **Agent 4: Data Ingestion Engineer**
+### **Agent D: Data Ingestion Engineer**
 **Domain:** External blockchain data acquisition and normalization  
 **Primary Responsibility:** ingestion-service and external API integrations
+
+#### Required Documentation:
+**Must Read:**
+- `docs/PRD-Million-Dollar-Hunter-Crypto-Dashboard.md` - Sections: Functional Requirements, Cross-Chain Support
+- `docs/Technical Development Plan.md` - Section II.B: Microservice Decomposition (ingestion-service), Section IV.A: External API Integration Blueprints
+- `docs/external-api-integrations.md` - Complete document (CRITICAL - rate limits, fallbacks, cost tracking)
+- `docs/database-migration-strategy.md` - Write-optimized schema for raw data
+- `docs/architecture-decisions.md` - CQRS write model patterns
+- `docs/AGENT-HANDOFF.md` - Handoff protocol
+
+**Reference as Needed:**
+- `docs/performance-requirements.md` - Ingestion throughput targets (≥100 tx/s)
+- `docs/testing-strategy.md` - Mocking strategies for external APIs
+- `docs/monitoring-alerting.md` - Budget alert thresholds
+- `docs/operational-runbook.md` - API failure handling
 
 #### Core Features:
 1. **Ingestion Service (CQRS Write Model)**
@@ -278,15 +344,29 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Performance tests for backfill throughput
 
 #### Dependencies:
-- Publishes events consumed by Agent 3's portfolio-service
-- Uses Kafka infrastructure from Agent 3
-- Coordinates with Agent 2 for rate limit tracking
+- Publishes events consumed by Agent C's portfolio-service
+- Uses Kafka infrastructure from Agent C
+- Coordinates with Agent B for rate limit tracking
 
 ---
 
-### **Agent 5: Market Data Engineer**
+### **Agent E: Market Data Engineer**
 **Domain:** Cryptocurrency pricing and market metrics  
 **Primary Responsibility:** market-data-service and price caching
+
+#### Required Documentation:
+**Must Read:**
+- `docs/PRD-Million-Dollar-Hunter-Crypto-Dashboard.md` - Sections: Price Tracking, Data Export
+- `docs/Technical Development Plan.md` - Section II.B: Microservice Decomposition (market-data-service), Section IV.A: External API Integrations (CoinGecko)
+- `docs/external-api-integrations.md` - Data freshness, caching strategies, CoinGecko rate limits
+- `docs/database-migration-strategy.md` - Token prices schema
+- `docs/AGENT-HANDOFF.md` - Handoff protocol
+
+**Reference as Needed:**
+- `docs/performance-requirements.md` - Cache hit rate targets (≥80%)
+- `docs/testing-strategy.md` - Load testing for concurrent requests
+- `docs/monitoring-alerting.md` - Price feed failure alerts
+- `docs/operational-runbook.md` - Stale data handling
 
 #### Core Features:
 1. **Market Data Service**
@@ -346,15 +426,29 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Load tests for concurrent price requests
 
 #### Dependencies:
-- Called by Agent 3's portfolio-service for price enrichment
-- Uses Redis infrastructure (shared with Agent 2 for rate limiting)
-- Exposes API through Agent 2's gateway
+- Called by Agent C's portfolio-service for price enrichment
+- Uses Redis infrastructure (shared with Agent B for rate limiting)
+- Exposes API through Agent B's gateway
 
 ---
 
-### **Agent 6: Frontend & Visualization Engineer**
+### **Agent F: Frontend & Visualization Engineer**
 **Domain:** User interface, data visualization, and client-side logic  
 **Primary Responsibility:** Next.js application and all frontend components
+
+#### Required Documentation:
+**Must Read:**
+- `docs/PRD-Million-Dollar-Hunter-Crypto-Dashboard.md` - Complete document (user stories, UX requirements, narrative)
+- `docs/Technical Development Plan.md` - Section III: Frontend Development Specification (complete)
+- `docs/frontend-components.md` - Complete document (component library, props, design system)
+- `docs/openapi.yaml` - REST API contracts for all frontend API calls
+- `docs/AGENT-HANDOFF.md` - Handoff protocol
+
+**Reference as Needed:**
+- `docs/performance-requirements.md` - Frontend budgets (TTFB, LCP, bundle size)
+- `docs/testing-strategy.md` - Component and E2E testing requirements
+- `docs/data-privacy-retention.md` - Export formats and data handling
+- `docs/architecture-decisions.md` - Next.js App Router rationale
 
 #### Core Features:
 1. **Next.js Application Architecture**
@@ -478,10 +572,10 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Performance budget compliance report
 
 #### Dependencies:
-- Consumes REST API from Agent 2's gateway
-- Requires authentication from Agent 1
-- Displays portfolio data from Agent 3
-- Shows market prices from Agent 5
+- Consumes REST API from Agent B's gateway
+- Requires authentication from Agent A
+- Displays portfolio data from Agent C
+- Shows market prices from Agent E
 - Coordinates with all agents for end-to-end testing
 
 ---
@@ -490,23 +584,23 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 
 ### **Phase 1: Foundational Backend & Core Services (Weeks 1-4)**
 
-**Active Agents:** 1, 2, 3  
+**Active Agents:** A, B, C  
 **Objective:** Establish architectural backbone, security, and core service infrastructure
 
-**Agent 1 Tasks:**
+**Agent A Tasks:**
 - Implement auth-service with JWT generation/validation
 - Set up PostgreSQL schema and golang-migrate
 - Create security hardening documentation
 - Integrate SAST tools in CI pipeline
 
-**Agent 2 Tasks:**
+**Agent B Tasks:**
 - Build API Gateway skeleton with routing
-- Implement JWT middleware (consuming Agent 1's validation)
+- Implement JWT middleware (consuming Agent A's validation)
 - Set up structured logging with zerolog
 - Create OpenAPI specification draft
 - Implement Prometheus metrics endpoints
 
-**Agent 3 Tasks:**
+**Agent C Tasks:**
 - Deploy Apache Kafka broker (Docker/Kubernetes)
 - Define event schemas and topics
 - Scaffold portfolio-service with basic gRPC interface
@@ -514,9 +608,9 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Implement basic wallet CRUD operations
 
 **Coordination Points:**
-- Joint session: API contract review (Agents 2 & 3)
-- Agent 1 → Agent 2: JWT validation interface handoff
-- Agent 3 publishes Kafka topic specifications for Agent 4
+- Joint session: API contract review (Agents B & C)
+- Agent A → Agent B: JWT validation interface handoff
+- Agent C publishes Kafka topic specifications for Agent D
 
 **Phase Deliverables:**
 - Functional auth-service with JWT issuance
@@ -529,24 +623,24 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 
 ### **Phase 2: Data Ingestion and Processing (Weeks 5-8)**
 
-**Active Agents:** 4, 5, 3  
+**Active Agents:** D, E, C  
 **Objective:** Build data pipeline from external sources to internal storage
 
-**Agent 4 Tasks:**
+**Agent D Tasks:**
 - Implement ingestion-service with Alchemy integration
 - Build Moralis client for redundancy
 - Create rate limiting and circuit breaker logic
 - Implement Kafka event consumer and producer
 - Set up WireMock for API mocking
 
-**Agent 5 Tasks:**
+**Agent E Tasks:**
 - Build market-data-service with CoinGecko integration
 - Implement Redis caching layer
 - Create gRPC service interface
 - Set up background price refresh workers
 - Implement cost tracking metrics
 
-**Agent 3 Tasks:**
+**Agent C Tasks:**
 - Build Kafka consumer for TransactionDataIngested events
 - Implement data aggregation pipeline
 - Create asset_snapshots time-series generation
@@ -554,9 +648,9 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Implement price enrichment logic
 
 **Coordination Points:**
-- Agent 4 → Agent 3: Event schema validation and testing
-- Agent 5 → Agent 3: Price service API contract review
-- Agent 4 & 5: Rate limit budget allocation discussion
+- Agent D → Agent C: Event schema validation and testing
+- Agent E → Agent C: Price service API contract review
+- Agent D & E: Rate limit budget allocation discussion
 - All agents: Integration testing session with Testcontainers
 
 **Phase Deliverables:**
@@ -569,10 +663,10 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 
 ### **Phase 3: Frontend Scaffolding and Core UI (Weeks 9-12)**
 
-**Active Agents:** 6, 2  
+**Active Agents:** F, B  
 **Objective:** Create user-facing application with complete UI
 
-**Agent 6 Tasks:**
+**Agent F Tasks:**
 - Initialize Next.js project with App Router
 - Set up Material-UI theme and design system
 - Build authentication pages (login/register)
@@ -581,7 +675,7 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Build reusable component library
 - Integrate TanStack Query for API calls
 
-**Agent 2 Tasks:**
+**Agent B Tasks:**
 - Finalize all REST API endpoints
 - Implement pagination and filtering support
 - Add export endpoint functionality
@@ -589,9 +683,9 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Conduct load testing with k6
 
 **Coordination Points:**
-- Agent 6 → Agent 2: API requirements and contract review
+- Agent F → Agent B: API requirements and contract review
 - Joint session: End-to-end flow testing (auth → dashboard → wallet view)
-- Agent 6 provides frontend requirements for response formats
+- Agent F provides frontend requirements for response formats
 
 **Phase Deliverables:**
 - Functional Next.js application with authentication
@@ -604,10 +698,10 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 
 ### **Phase 4: End-to-End Integration and Visualization (Weeks 13-16)**
 
-**Active Agents:** All (6, 1, 2, 3, 4, 5)  
+**Active Agents:** All (F, A, B, C, D, E)  
 **Objective:** Connect all components, implement visualization, optimize, and prepare for launch
 
-**Agent 6 Tasks:**
+**Agent F Tasks:**
 - Integrate TradingView Lightweight Charts
 - Connect all components to live API data
 - Implement real-time price updates
@@ -616,31 +710,31 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Performance optimization (bundle size, rendering)
 - Accessibility audit and fixes
 
-**Agent 1 Tasks:**
+**Agent A Tasks:**
 - Security audit and penetration testing
 - Final secret management setup
 - Production security hardening
 - Documentation updates
 
-**Agent 2 Tasks:**
+**Agent B Tasks:**
 - API performance tuning
 - Final load testing and optimization
 - Rate limiting fine-tuning
 - Monitoring dashboard creation
 
-**Agent 3 Tasks:**
+**Agent C Tasks:**
 - Portfolio aggregation optimization
 - Query performance tuning
 - Saga pattern edge case handling
 - Export functionality testing
 
-**Agent 4 Tasks:**
+**Agent D Tasks:**
 - Historical backfill optimization
 - Multi-chain support validation (Solana + EVM)
 - External API fallback testing
 - Cost budget validation
 
-**Agent 5 Tasks:**
+**Agent E Tasks:**
 - Cache hit rate optimization
 - Price feed reliability testing
 - Stale data fallback validation
@@ -706,13 +800,13 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 - Contract tests for gRPC interfaces
 - Performance tests for SLO compliance
 
-**Agent 2 (Gateway):**
+**Agent B (Gateway):**
 - Contract tests against OpenAPI specification
 - Load testing with k6 (baseline: 100 req/min for 10 min)
 - Rate limiting validation
 - End-to-end API flow tests
 
-**Agent 6 (Frontend):**
+**Agent F (Frontend):**
 - Component unit tests with React Testing Library
 - Integration tests for user flows
 - Visual regression tests (optional)
@@ -737,12 +831,12 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 
 ### Agent-Specific Deployment Responsibilities:
 
-**Agent 1:** Auth-service deployment, secret management setup
-**Agent 2:** API Gateway deployment, public load balancer configuration
-**Agent 3:** Portfolio-service + Kafka broker deployment
-**Agent 4:** Ingestion-service deployment with auto-scaling
-**Agent 5:** Market-data-service + Redis deployment
-**Agent 6:** Next.js frontend deployment (Vercel/static hosting)
+**Agent A:** Auth-service deployment, secret management setup
+**Agent B:** API Gateway deployment, public load balancer configuration
+**Agent C:** Portfolio-service + Kafka broker deployment
+**Agent D:** Ingestion-service deployment with auto-scaling
+**Agent E:** Market-data-service + Redis deployment
+**Agent F:** Next.js frontend deployment (Vercel/static hosting)
 
 ### Monitoring:
 - Prometheus metrics from all services
@@ -779,19 +873,19 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 ### Technical Risks:
 
 **Risk**: External API rate limits exceeded  
-**Owner**: Agent 4, Agent 5  
+**Owner**: Agent D, Agent E  
 **Mitigation**: Robust caching, request batching, fallback providers, cost monitoring
 
 **Risk**: Database performance degradation with large datasets  
-**Owner**: Agent 3, Agent 4  
+**Owner**: Agent C, Agent D  
 **Mitigation**: Read-optimized schemas, proper indexing, query performance tests, pagination
 
 **Risk**: Frontend bundle size exceeds budget  
-**Owner**: Agent 6  
+**Owner**: Agent F  
 **Mitigation**: Code splitting, lazy loading, bundle analysis in CI, dynamic imports
 
 **Risk**: Inter-service communication latency  
-**Owner**: Agent 2, all backend agents  
+**Owner**: Agent B, all backend agents  
 **Mitigation**: gRPC for sync calls, Kafka for async, distributed tracing, performance SLOs
 
 ### Coordination Risks:
@@ -800,7 +894,7 @@ The optimal team composition consists of six specialized AI engineer agents, eac
 **Mitigation**: Clear phase boundaries, mock/stub interfaces early, parallel development where possible
 
 **Risk**: Inconsistent API contracts  
-**Mitigation**: OpenAPI as source of truth, contract testing, Agent 2 as contract owner
+**Mitigation**: OpenAPI as source of truth, contract testing, Agent B as contract owner
 
 **Risk**: Integration issues discovered late  
 **Mitigation**: Continuous integration testing, end-of-phase integration checkpoints
