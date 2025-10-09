@@ -51,6 +51,8 @@ func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Durat
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) {
 	limiter := newLimiter(cfg, logger)
 
+	httpMetrics := observability.NewHTTPMetrics(reg, cfg.PrometheusNamespace)
+
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
 
@@ -60,6 +62,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 	api := r.Group("/api/v1")
 	api.Use(middleware.Auth(cfg))
 	api.Use(middleware.RateLimit(limiter))
+	api.Use(middleware.Metrics(httpMetrics))
 
 	api.GET("/portfolios", handlers.ListPortfolios())
 	api.POST("/portfolios", handlers.AddWallet())
