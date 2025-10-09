@@ -34,6 +34,7 @@ services:
     build:
       context: ../
       dockerfile: services/portfolio-service/Dockerfile
+    restart: on-failure
     environment:
       GRPC_ADDR: ":8081"
       DATABASE_URL: "postgres://portfolio:portfolio@postgres:5432/portfolio?sslmode=disable"
