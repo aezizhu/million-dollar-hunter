@@ -1,0 +1,373 @@
+openapi: 3.0.3
+info:
+  title: Million Hunter API
+  version: 0.1.0
+  description: Public REST API exposed by the API Gateway for the Million Hunter dashboard.
+servers:
+  - url: https://api.million-hunter.local
+    description: Production
+  - url: http://localhost:8080
+    description: Local development
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/auth/register:
+    post:
+      summary: Register a new user (scaffolded; disabled in MVP)
+      security: []  # public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/v1/auth/login:
+    post:
+      summary: Login and receive tokens (MVP uses hardcoded gate)
+      security: []  # public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /api/v1/auth/refresh:
+    post:
+      summary: Exchange refresh token for new access token
+      security: []  # sent via cookie; still public endpoint
+      responses:
+        '200':
+          description: New access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefreshResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/portfolios:
+    get:
+      summary: List tracked wallets/portfolios for the user
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: Paginated portfolios
+          headers:
+            X-RateLimit-Limit:
+              schema: { type: integer }
+            X-RateLimit-Remaining:
+              schema: { type: integer }
+            X-RateLimit-Reset:
+              schema: { type: integer, description: Unix epoch seconds }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      summary: Add a wallet to track
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddWalletRequest'
+      responses:
+        '202':
+          description: Tracking initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AddWalletResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+        - bearerAuth: []
+  /api/v1/wallets/{address}:
+    get:
+      summary: Get wallet overview, assets, and performance
+      parameters:
+        - in: path
+          name: address
+          required: true
+          schema: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+        - in: query
+          name: chain
+          schema: { type: string, enum: [ethereum, bsc, polygon, arbitrum, optimism, solana] }
+      responses:
+        '200':
+          description: Wallet view
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletView'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+        - bearerAuth: []
+  /api/v1/wallets/{address}/transactions:
+    get:
+      summary: Paginated transaction history
+      parameters:
+        - in: path
+          name: address
+          required: true
+          schema: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Transactions page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+        - bearerAuth: []
+  /api/v1/tokens/{contractAddress}/holders:
+    get:
+      summary: Top holders for a token
+      parameters:
+        - in: path
+          name: contractAddress
+          required: true
+          schema: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+        - in: query
+          name: chain
+          schema: { type: string, enum: [ethereum, bsc, polygon, arbitrum, optimism] }
+      responses:
+        '200':
+          description: Top holders
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TopHoldersResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+        - bearerAuth: []
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      headers:
+        WWW-Authenticate:
+          schema: { type: string }
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          schema: { type: integer, description: Seconds until next allowed request }
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          example: validation_error
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+    RegisterRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 128 }
+    RegisterResponse:
+      type: object
+      required: [userId, message]
+      properties:
+        userId: { type: string, format: uuid }
+        message: { type: string }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    LoginResponse:
+      type: object
+      required: [accessToken, refreshToken]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+    TokenRefreshResponse:
+      type: object
+      required: [accessToken]
+      properties:
+        accessToken: { type: string }
+    PortfolioSummary:
+      type: object
+      required: [id, address, chain, netWorthUsd]
+      properties:
+        id: { type: string, format: uuid }
+        address: { type: string }
+        chain: { type: string }
+        netWorthUsd: { type: number }
+    PortfolioListResponse:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/PortfolioSummary' }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    AddWalletRequest:
+      type: object
+      required: [address, chain]
+      properties:
+        address: { type: string }
+        chain: { type: string }
+        nickname: { type: string, maxLength: 64 }
+    AddWalletResponse:
+      type: object
+      required: [jobId, status]
+      properties:
+        jobId: { type: string, format: uuid }
+        status: { type: string, enum: [queued, running] }
+    WalletView:
+      type: object
+      required: [address, chain, assets, history]
+      properties:
+        address: { type: string }
+        chain: { type: string }
+        assets:
+          type: array
+          items:
+            type: object
+            required: [tokenAddress, symbol, balance, usdValue]
+            properties:
+              tokenAddress: { type: string }
+              symbol: { type: string }
+              balance: { type: number }
+              usdValue: { type: number }
+        history:
+          type: array
+          items:
+            type: object
+            required: [time, value]
+            properties:
+              time: { type: string, format: date-time }
+              value: { type: number }
+    TransactionPage:
+      type: object
+      required: [items, page, pageSize, total]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [timestamp, type, from, to, symbol, amount, usdValue, txHash]
+            properties:
+              timestamp: { type: string, format: date-time }
+              type: { type: string, enum: [SEND, RECEIVE, SWAP, APPROVE, MINT, BURN] }
+              from: { type: string }
+              to: { type: string }
+              symbol: { type: string }
+              amount: { type: number }
+              usdValue: { type: number }
+              txHash: { type: string }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+    TopHoldersResponse:
+      type: object
+      required: [token, holders]
+      properties:
+        token: { type: string }
+        holders:
+          type: array
+          items:
+            type: object
+            required: [address, balance, percent]
+            properties:
+              address: { type: string }
+              balance: { type: number }
+              percent: { type: number }

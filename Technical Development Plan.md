@@ -144,6 +144,9 @@ The platform's security model is centered around JWTs for stateless authenticati
   5. If the token is invalid or expired, the gateway immediately rejects the request with a 401 Unauthorized status.  
 * **Security Best Practices:**  
   * The signing key for the JWTs will be a strong, randomly generated secret (for HS256) or a private key (for RS256) and will be managed securely via environment variables or a secret management system. It will never be hardcoded in the source code.34  
+  
+#### MVP Authentication Reconciliation
+For the single-user MVP, the public endpoints under /api/v1/auth are stubbed and the API Gateway enforces a simple login gate using a hardcoded admin credential matching the PRD. JWT issuance/validation and multi-user flows (register, refresh) are scaffolded but disabled in production builds until multi-user is introduced. This preserves the JWT-compatible architecture while keeping the MVP operational simplicity.
   * All communication between the client, gateway, and services will be encrypted using TLS.
 
 ### **F. System Observability: A Framework for Logging, Tracing, and Metrics**
@@ -281,6 +284,13 @@ A fully automated CI/CD pipeline is essential for achieving development velocity
 * **Continuous Deployment (CD):** This stage will be triggered by a merge into the main branch.  
   1. **Deploy to Staging:** The newly built container image will be automatically deployed to a dedicated staging environment that mirrors production. Automated end-to-end tests can be run against this environment.  
   2. **Manual Promotion to Production:** The pipeline will pause for a manual approval step before deploying to the production environment. This provides a final gate for quality assurance and allows for deployments to be scheduled during low-traffic periods. The deployment to production will use a rolling update strategy to ensure zero downtime.
+  
+### **C. Secrets and Configuration Management**
+- Tooling: Use sops + age for encrypting configuration files in-repo, and Kubernetes Secrets (or Docker Compose env files for local) for runtime injection. For cloud or future scaling, integrate with HashiCorp Vault or AWS Secrets Manager; interface via environment variables at runtime.
+- Local Development: Provide .env.example files; actual .env kept out of VCS. Use docker-compose to inject env vars into services. For encrypted values, maintain config.enc.yaml managed by sops; decrypt during CI with repository-level age key.
+- CI/CD: Store sensitive values as encrypted GitHub Actions secrets. CI jobs pass secrets as env vars to build/deploy steps only. Never commit secrets or keys.
+- Rotation: Document key rotation procedures and short TTLs for API keys. Prefer per-environment credentials.
+- Access Controls: Principle of least privilege for API keys (Alchemy, Moralis, CoinGecko). Network egress restricted at cluster level where applicable.
 
 ## **VI. Implementation Roadmap and Strategic Recommendations**
 
@@ -296,6 +306,7 @@ The development will be structured in four distinct phases, allowing for iterati
     * Implement the auth-service, including user registration, login, and JWT generation/validation logic.  
     * Scaffold the api-gateway with basic request routing and JWT authentication middleware.  
     * Define and implement the initial PostgreSQL database schemas for all microservices using a migration tool.  
+    * Migration Tool: Use golang-migrate (migrate) for schema versioning across services. Rationale: widely adopted in Go ecosystems, simple CLI/CI usage, supports PostgreSQL, reversible up/down migrations, and works well with containerized workflows. Migrations are stored per service under db/migrations with numbered up/down files and applied via CI and on container startup with idempotent execution.
     * Set up the foundational CI/CD pipeline to automate testing and container builds for the initial services.  
     * Establish the baseline Kubernetes configuration for deploying the core services.  
 * **Phase 2: Data Ingestion and Processing (Weeks 5-8)**  
