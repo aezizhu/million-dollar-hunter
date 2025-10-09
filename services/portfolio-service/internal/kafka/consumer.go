@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/service"
 )

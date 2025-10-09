@@ -1,8 +1,8 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.21-alpine AS builder
 WORKDIR /app
-COPY services/portfolio-service/go.mod services/portfolio-service/go.sum* ./ 
+COPY services/portfolio-service/go.mod services/portfolio-service/go.sum* ./
 RUN go mod download
-COPY services/portfolio-service/ ./ 
+COPY services/portfolio-service/ ./
 COPY proto/ ./proto/
 RUN go build -o /bin/portfolio-service ./cmd/server
 

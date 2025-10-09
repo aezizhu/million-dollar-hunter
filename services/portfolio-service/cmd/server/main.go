@@ -11,7 +11,7 @@ import (
 	"github.com/caarlos0/env/v11"
 	"google.golang.org/grpc"
 
-	pb "github.com/aezizhu/million-dollar-hunter/proto/portfolio/v1"
+	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/kafka"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
