@@ -1,0 +1,180 @@
+name: Ingestion Service CI
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'ingestion-service/**'
+      - '.github/workflows/ingestion-service-ci.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'ingestion-service/**'
+      - '.github/workflows/ingestion-service-ci.yml'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ingestion-service
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: ingestion
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+      wiremock:
+        image: wiremock/wiremock:3.7.0
+        ports:
+          - 8080:8080
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache-dependency-path: ingestion-service/go.sum
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Verify dependencies
+      run: go mod verify
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Copy WireMock mappings
+      run: |
+        docker cp wiremock/mappings $(docker ps -qf "ancestor=wiremock/wiremock:3.7.0"):/home/wiremock/mappings || true
+        sleep 2
+
+    - name: Set environment variables
+      run: |
+        echo "ALCHEMY_BASE_URL=http://localhost:8080/alchemy" >> $GITHUB_ENV
+        echo "MORALIS_BASE_URL=http://localhost:8080/moralis" >> $GITHUB_ENV
+        echo "REDIS_ADDR=localhost:6379" >> $GITHUB_ENV
+        echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/ingestion?sslmode=disable" >> $GITHUB_ENV
+        echo "ALCHEMY_API_KEY=test" >> $GITHUB_ENV
+        echo "MORALIS_API_KEY=test" >> $GITHUB_ENV
+
+    - name: Run tests
+      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+    - name: Generate coverage report
+      run: go tool cover -func=coverage.out
+
+    - name: Run lint (if configured)
+      run: |
+        if command -v golangci-lint &> /dev/null; then
+          golangci-lint run
+        else
+          echo "golangci-lint not installed, skipping"
+        fi
+      continue-on-error: true
+
+    - name: Upload coverage
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./ingestion-service/coverage.out
+        flags: ingestion-service
+      continue-on-error: true
+
+  benchmark:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ingestion-service
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: ingestion
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+      wiremock:
+        image: wiremock/wiremock:3.7.0
+        ports:
+          - 8080:8080
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache-dependency-path: ingestion-service/go.sum
+
+    - name: Install dependencies
+      run: go mod download
+
+    - name: Copy WireMock mappings
+      run: |
+        docker cp wiremock/mappings $(docker ps -qf "ancestor=wiremock/wiremock:3.7.0"):/home/wiremock/mappings || true
+        sleep 2
+
+    - name: Set environment variables
+      run: |
+        echo "ALCHEMY_BASE_URL=http://localhost:8080/alchemy" >> $GITHUB_ENV
+        echo "MORALIS_BASE_URL=http://localhost:8080/moralis" >> $GITHUB_ENV
+        echo "REDIS_ADDR=localhost:6379" >> $GITHUB_ENV
+        echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/ingestion?sslmode=disable" >> $GITHUB_ENV
+        echo "ALCHEMY_API_KEY=test" >> $GITHUB_ENV
+        echo "MORALIS_API_KEY=test" >> $GITHUB_ENV
+
+    - name: Run benchmarks
+      run: |
+        go test -bench=. -benchmem -run=^$ ./internal/service | tee benchmark_results.txt
+        echo "Benchmark completed. Results:"
+        cat benchmark_results.txt
+
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-results
+        path: ingestion-service/benchmark_results.txt

@@ -1,0 +1,14 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "GET",
+    "urlPattern": "/moralis/api/wallets/0xunauth/balances.*"
+  },
+  "response": {
+    "status": 401,
+    "jsonBody": {
+      "error": "Invalid API key"
+    },
+    "headers": { "Content-Type": "application/json" }
+  }
+}

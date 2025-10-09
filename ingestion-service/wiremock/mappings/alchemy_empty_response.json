@@ -1,0 +1,21 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "POST",
+    "urlPattern": "/alchemy/.+",
+    "bodyPatterns": [
+      { "contains": "alchemy_getAssetTransfers" },
+      { "contains": "0xempty" }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": {
+      "result": {
+        "transfers": [],
+        "pageKey": ""
+      }
+    },
+    "headers": { "Content-Type": "application/json" }
+  }
+}

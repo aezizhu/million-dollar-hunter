@@ -1,0 +1,21 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "POST",
+    "urlPattern": "/alchemy/.+",
+    "bodyPatterns": [
+      { "contains": "alchemy_getAssetTransfers" },
+      { "contains": "0xratelimit" }
+    ]
+  },
+  "response": {
+    "status": 429,
+    "jsonBody": {
+      "error": "Rate limit exceeded"
+    },
+    "headers": { 
+      "Content-Type": "application/json",
+      "Retry-After": "60"
+    }
+  }
+}
