@@ -28,3 +28,13 @@ func TestRefreshNotImplemented(t *testing.T) {
 		t.Fatalf("expected 501")
 	}
 }
+
+func TestRefreshBadJSON(t *testing.T) {
+	s := &Server{}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader([]byte("{bad")))
+	w := httptest.NewRecorder()
+	s.Refresh(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400")
+	}
+}
