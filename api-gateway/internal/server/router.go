@@ -14,6 +14,7 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/handlers"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/middleware"
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/observability"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/ratelimit"
 )
 
@@ -63,6 +64,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 	api.Use(middleware.Auth(cfg))
 	api.Use(middleware.RateLimit(limiter))
 	api.Use(middleware.Metrics(httpMetrics))
+	api.Use(middleware.Tracing())
 
 	api.GET("/portfolios", handlers.ListPortfolios())
 	api.POST("/portfolios", handlers.AddWallet())

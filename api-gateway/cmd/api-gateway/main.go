@@ -28,6 +28,8 @@ func main() {
 	}()
 	reg := observability.InitMetricsRegistry(cfg)
 
+	server.MustValidateOpenAPI(cfg.OpenAPIPath)
+
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 
