@@ -2,17 +2,32 @@ package auth
 
 import "testing"
 
-func TestValidatePasswordPolicy(t *testing.T) {
-	if err := ValidatePasswordPolicy("Short1!"); err == nil {
-		t.Fatalf("expected error for short password")
+func TestValidatePasswordPolicy_AllCases(t *testing.T) {
+	tests := []struct{
+		name string
+		pw   string
+		ok   bool
+	}{
+		{"too_short", "Aa1!", false},
+		{"no_upper", "validpass12!", false},
+		{"no_lower", "VALIDPASS12!", false},
+		{"no_digit", "ValidPass!!", false},
+		{"no_symbol", "ValidPass12", false},
+		{"valid", "ValidPass12!", true},
 	}
-	if err := ValidatePasswordPolicy("longbutnosymbol1A"); err == nil {
-		t.Fatalf("expected error for missing symbol")
-	}
-	if err := ValidatePasswordPolicy("ValidPass12!"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidatePasswordPolicy(tt.pw)
+			if tt.ok && err != nil {
+				t.Fatalf("expected ok, got err: %v", err)
+			}
+			if !tt.ok && err == nil {
+				t.Fatalf("expected error")
+			}
+		})
 	}
 }
+
 
 func TestHashAndCheckPassword(t *testing.T) {
 	pw := "ValidPass12!"
