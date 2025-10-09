@@ -68,10 +68,18 @@ jobs:
     - name: Build
       run: go build -v ./...
 
-    - name: Copy WireMock mappings
+    - name: Setup WireMock mappings
       run: |
-        docker cp wiremock/mappings $(docker ps -qf "ancestor=wiremock/wiremock:3.7.0"):/home/wiremock/mappings || true
-        sleep 2
+        WIREMOCK_CONTAINER=$(docker ps --filter "ancestor=wiremock/wiremock:3.7.0" --format "{{.ID}}")
+        if [ -n "$WIREMOCK_CONTAINER" ]; then
+          docker cp wiremock/mappings/. $WIREMOCK_CONTAINER:/home/wiremock/mappings/
+          docker restart $WIREMOCK_CONTAINER
+          sleep 5
+          curl -s http://localhost:8080/__admin/mappings | head -20 || echo "Could not verify mappings"
+        else
+          echo "WireMock container not found"
+          exit 1
+        fi
 
     - name: Set environment variables
       run: |
@@ -153,10 +161,18 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
-    - name: Copy WireMock mappings
+    - name: Setup WireMock mappings
       run: |
-        docker cp wiremock/mappings $(docker ps -qf "ancestor=wiremock/wiremock:3.7.0"):/home/wiremock/mappings || true
-        sleep 2
+        WIREMOCK_CONTAINER=$(docker ps --filter "ancestor=wiremock/wiremock:3.7.0" --format "{{.ID}}")
+        if [ -n "$WIREMOCK_CONTAINER" ]; then
+          docker cp wiremock/mappings/. $WIREMOCK_CONTAINER:/home/wiremock/mappings/
+          docker restart $WIREMOCK_CONTAINER
+          sleep 5
+          curl -s http://localhost:8080/__admin/mappings | head -20 || echo "Could not verify mappings"
+        else
+          echo "WireMock container not found"
+          exit 1
+        fi
 
     - name: Set environment variables
       run: |
