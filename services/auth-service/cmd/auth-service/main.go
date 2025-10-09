@@ -27,6 +27,7 @@ func main() {
 	s := &httpapi.Server{Logger: &log, JWT: j}
 	mux.HandleFunc("/healthz", s.Health)
 	mux.HandleFunc("/api/v1/auth/login", s.Login)
+	mux.HandleFunc("/api/v1/auth/register", s.Register)
 	mux.HandleFunc("/api/v1/auth/logout", s.Logout)
 	mux.HandleFunc("/api/v1/auth/refresh", s.Refresh)
 
