@@ -54,3 +54,26 @@ func TestLoginUnauthorized(t *testing.T) {
 		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
+
+func TestLoginBadJSON(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "false")
+	s := &Server{JWT: &fakeJWT{}}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader([]byte("{badjson")))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestLoginMultiUserNotImplemented(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "true")
+	s := &Server{JWT: &fakeJWT{}}
+	body, _ := json.Marshal(LoginRequest{Username: "x", Password: "y"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusNotImplemented {
+		t.Fatalf("expected 501, got %d", w.Code)
+	}
+}

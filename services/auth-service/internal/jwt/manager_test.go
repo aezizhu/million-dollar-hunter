@@ -1,6 +1,7 @@
 package jwtmgr
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -39,4 +40,30 @@ func TestExpiration(t *testing.T) {
 	if _, err := m.ValidateToken(access, "aud"); err == nil {
 		t.Fatalf("expected expired token error")
 	}
+}
+
+func TestGeneratePair(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 2*time.Minute, []byte("key"))
+	a, r, exp, err := m.GeneratePair("u", "e@x.com")
+	if err != nil || a == "" || r == "" || exp.Before(time.Now()) {
+		t.Fatalf("invalid pair result")
+	}
+}
+
+func TestInvalidSignature(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	token, _, _ := m.GenerateToken("u", "e@x.com", 1*time.Minute)
+	other := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("other"))
+	if _, err := other.ValidateToken(token, "aud"); err == nil {
+		t.Fatalf("expected signature error")
+	}
+}
+
+func TestMalformedToken(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	if _, err := m.ValidateToken("not-a-jwt", "aud"); err == nil {
+		t.Fatalf("expected parse error")
+	}
+	parts := strings.Split("a.b.", ".")
+	_ = parts
 }
