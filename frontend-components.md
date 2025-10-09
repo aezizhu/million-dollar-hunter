@@ -27,3 +27,14 @@
 
 ## Documentation
 - Examples in Storybook (future); code samples in /examples.
+## ExportButton
+
+- Props:
+  - address: string
+  - chain: 'ethereum' | 'bsc' | 'polygon' | 'arbitrum' | 'optimism' | 'solana'
+  - defaultFormat?: 'csv' | 'json' (default 'json')
+  - onError?: (err: Error) => void
+- Behavior:
+  - Issues GET /api/v1/export/wallet/{address}?chain={chain}&format={format}
+  - Triggers browser download for CSV or JSON
+  - Displays toast on error and invokes onError if provided

@@ -1,3 +1,5 @@
+
+
 # Monitoring & Alerting
 
 ## SLOs
@@ -23,3 +25,7 @@
 ## On-call & Escalation
 - Agent-based monitoring with automated remediation (cache TTL bump, breaker trip).
 - Owner escalation if Sev1 persists beyond 15 minutes.
+## External API Cost Alerts
+- Metric: external_api_estimated_cost by provider
+- Thresholds: 80% (warning), 90% (critical), 100% (page)
+- Dashboard: monthly budget burn-down with projected end-of-month forecast

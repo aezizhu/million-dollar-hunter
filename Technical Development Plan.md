@@ -392,3 +392,17 @@ The development will be structured in four distinct phases, allowing for iterati
 50. Coin Price by IDs \- CoinGecko API, accessed on October 9, 2025, [https://docs.coingecko.com/reference/simple-price](https://docs.coingecko.com/reference/simple-price)  
 51. Token Price by Token Addresses \- CoinGecko API, accessed on October 9, 2025, [https://docs.coingecko.com/v3.0.1/reference/onchain-simple-price](https://docs.coingecko.com/v3.0.1/reference/onchain-simple-price)  
 52. Coin Price by Token Addresses \- CoinGecko API, accessed on October 9, 2025, [https://docs.coingecko.com/v3.0.1/reference/simple-token-price](https://docs.coingecko.com/v3.0.1/reference/simple-token-price)
+### MVP vs Future State: Authentication
+
+- MVP (single-user): The API Gateway enforces a hardcoded admin login that matches the PRD. JWT issuance/validation and user registration are scaffolded but not active in runtime. No dependency on the auth-service database at runtime for login.  
+- Future (multi-user): Enable auth-service and the full JWT flow (register/login/refresh). Gateway and services enforce JWT middleware.  
+- Feature Flag: ENABLE_MULTI_USER=false for MVP; set to true to activate the multi-user stack.
+
+#### Users Table Treatment in MVP
+- The auth-service users table is future-state in the MVP. Do not couple runtime flows to it while ENABLE_MULTI_USER=false.  
+- Optionally seed a single admin user when transitioning to multi-user for consistency and migration testing.
+
+### Ingestion Responsibilities: Historical Top Holders
+- The ingestion-service runs periodic snapshot jobs to persist top holders over time for configured tokens:
+  - holder_snapshots: id BIGSERIAL PK, token_address TEXT, holder_address TEXT, balance NUMERIC, rank INT, timestamp TIMESTAMPTZ.
+- Snapshots power historical analysis and trend detection in the portfolio-service.

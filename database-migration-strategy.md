@@ -29,3 +29,17 @@
 - Tag migration versions per release.
 - Keep migrations immutable post-merge.
 - Document data migrations separately from schema migrations.
+## Future-State Schemas in MVP
+- The auth-service users table is preparatory for multi-user and not required for MVP runtime.  
+- Postpone enabling cross-service constraints that force usage until ENABLE_MULTI_USER=true.  
+- Optionally seed a single admin user when transitioning to multi-user to validate auth flows and migrations.
+
+## Holder Snapshots Schema
+- Add holder_snapshots (ingestion-service) to support historical top holder tracking:
+  - id BIGSERIAL PK
+  - token_address TEXT
+  - holder_address TEXT
+  - balance NUMERIC
+  - rank INT
+  - timestamp TIMESTAMPTZ
+- Migration guidance: create table with appropriate indexes on (token_address, timestamp) and (token_address, rank, timestamp) for time-series queries.

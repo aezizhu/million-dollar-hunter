@@ -128,7 +128,12 @@ paths:
         - in: path
           name: address
           required: true
-          schema: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+          schema:
+            oneOf:
+              - type: string
+                pattern: '^0x[a-fA-F0-9]{40}$'
+              - type: string
+                pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
         - in: query
           name: chain
           schema: { type: string, enum: [ethereum, bsc, polygon, arbitrum, optimism, solana] }
@@ -154,7 +159,12 @@ paths:
         - in: path
           name: address
           required: true
-          schema: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+          schema:
+            oneOf:
+              - type: string
+                pattern: '^0x[a-fA-F0-9]{40}$'
+              - type: string
+                pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
         - in: query
           name: page
           schema: { type: integer, minimum: 1, default: 1 }
@@ -202,6 +212,42 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
       security:
         - bearerAuth: []
+  /api/v1/export/wallet/{address}:
+    get:
+      summary: Export wallet data as CSV/JSON
+      parameters:
+        - in: path
+          name: address
+          required: true
+          schema:
+            oneOf:
+              - type: string
+                pattern: '^0x[a-fA-F0-9]{40}$'
+              - type: string
+                pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
+        - in: query
+          name: chain
+          schema: { type: string, enum: [ethereum, bsc, polygon, arbitrum, optimism, solana] }
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv, json], default: json }
+      responses:
+        '200':
+          description: Export payload
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+      security:
+        - bearerAuth: []
+
 components:
   securitySchemes:
     bearerAuth:

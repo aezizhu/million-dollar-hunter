@@ -32,3 +32,7 @@
 - Lint, unit, integration, and contract tests on PR.
 - E2E against docker-compose in CI.
 - Upload coverage artifacts and fail build if below thresholds.
+## Performance Baseline
+- Baseline: 1 concurrent user, 100 req/min for 10 minutes.
+- Target: p95 <= 300ms; report cold vs warm cache; cache hit rate >= 80%.
+- Capture and publish k6/Locust results alongside Prometheus RED metrics snapshots.

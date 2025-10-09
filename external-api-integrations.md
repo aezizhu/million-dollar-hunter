@@ -4,8 +4,14 @@ Providers: Alchemy, Moralis, CoinGecko.
 
 ## Rate Limiting & Quotas
 - Central limiter at API Gateway; per-provider client-side limiters.
-- Redis counters with sliding window; expose X-RateLimit-* headers.
+- Token Bucket via Redis. Expose X-RateLimit-* headers to clients.
 - Budget dashboards per provider with daily/weekly quotas.
+
+### Rate Limiting Algorithm (Token Bucket)
+- Redis keys: ratelimit:{provider}:{bucket} with fields tokens (int), last_refill_ts (epoch seconds).
+- Refill: provider-specific rate (e.g., Alchemy 20 rps) with max capacity = burst size.
+- Decrement tokens per request; when tokens exhausted, respond 429 with Retry-After.
+- Separate buckets by critical route if needed (e.g., transactions vs holders).
 
 ## Fallbacks
 - Prefer primary Alchemy for transfers; fallback to Moralis on 5xx/timeouts after exponential backoff.
@@ -15,6 +21,16 @@ Providers: Alchemy, Moralis, CoinGecko.
 ## Cost Estimation & Budget Tracking
 - Estimate cost per call from provider plans; maintain monthly budget caps.
 - Record usage metrics (requests, cache hits, retries) to Prometheus; alert at 80/90/100% of budget.
+
+### Monthly Budget Limits (MVP)
+- Alchemy: $TBD/month (≈ Y req/day)
+- Moralis: $TBD/month (≈ Y req/day)
+- CoinGecko: Free tier (Z req/minute)
+
+### Cost Tracking Implementation
+- Redis counter: api:budget:{provider}:{YYYY-MM}
+- Prometheus metric: external_api_estimated_cost{provider="alchemy"}
+- Alerts: thresholds at 80%, 90%, 100% of monthly cap
 
 ## Data Freshness
 - Prices TTL: 60s; token holders refresh: 5–10 minutes configurable.

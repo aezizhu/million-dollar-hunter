@@ -27,3 +27,11 @@
 ## Change Management
 - Rolling deploys; feature flags for risky changes.
 - Pre-deploy smoke tests; post-deploy watch for 30 minutes.
+## DR Targets
+- RPO: 24 hours (nightly backups).
+- RTO: 2 hours (restore from snapshot and verify).
+
+## Rollback Decision Tree
+- Immediate rollback if: sustained 5xx > 10% for 5 minutes, critical endpoints down, or data corruption detected.
+- Investigate up to 15 minutes if: p95 latency > SLO but trending down; rollback if not recovered.
+- After rollback: capture logs, record timeline, open follow-up action items.
