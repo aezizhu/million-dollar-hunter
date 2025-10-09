@@ -186,17 +186,23 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
       security:
         - bearerAuth: []
-  /api/v1/tokens/{contractAddress}/holders:
+  /api/v1/tokens/{tokenAddress}/holders:
     get:
       summary: Top holders for a token
+      description: tokenAddress is an EVM contract address (0x...) or a Solana mint address (base58).
       parameters:
         - in: path
-          name: contractAddress
+          name: tokenAddress
           required: true
-          schema: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+          schema:
+            oneOf:
+              - type: string
+                pattern: '^0x[a-fA-F0-9]{40}$'
+              - type: string
+                pattern: '^[1-9A-HJ-NP-Za-km-z]{32,44}$'
         - in: query
           name: chain
-          schema: { type: string, enum: [ethereum, bsc, polygon, arbitrum, optimism] }
+          schema: { type: string, enum: [ethereum, bsc, polygon, arbitrum, optimism, solana] }
       responses:
         '200':
           description: Top holders
