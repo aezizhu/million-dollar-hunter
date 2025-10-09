@@ -17,6 +17,8 @@ Purpose: Quick navigation and guidance for when to use each document.
 - performance-requirements.md — API and frontend budgets, DB/query thresholds.
 - data-privacy-retention.md — Stored data, retention, export formats, deletion.
 - frontend-components.md — Component usage and props.
+- requirements-traceability.md — Map PRD requirements to Tech Plan, docs, and API/specs.
+- AGENT-HANDOFF.md — Protocol for handoffs: required artifacts, validations, and notifications.
 
 ## Decision Tree
 - Need system behavior or scope? Read PRD.
@@ -26,6 +28,8 @@ Purpose: Quick navigation and guidance for when to use each document.
 - Troubleshooting production issues? Read operational-runbook.md and monitoring-alerting.md.
 - Estimating or testing performance? Read performance-requirements.md and testing-strategy.md.
 - Integrating providers or handling rate limits/costs? Read external-api-integrations.md.
+- Tracing a requirement to implementation/spec? Read requirements-traceability.md.
+- Completing or reviewing an agent task? Read AGENT-HANDOFF.md.
 
 ## Versioning
 - Each document includes a last-updated timestamp in Git history. When making substantial changes, add a “Changelog” section noting the update in the file.
