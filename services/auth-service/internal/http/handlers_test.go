@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/auth"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
@@ -72,6 +73,12 @@ func TestLoginBadJSON(t *testing.T) {
 type fakeUserStore struct{}
 func (f fakeUserStore) Create(ctx context.Context, email, passwordHash string) (store.User, error) { return store.User{}, nil }
 func (f fakeUserStore) GetByEmail(ctx context.Context, email string) (store.User, error)           { return store.User{}, assertErr{} }
+type storeWithHash struct{ hash string }
+func (s storeWithHash) Create(ctx context.Context, email, passwordHash string) (store.User, error) { return store.User{}, nil }
+func (s storeWithHash) GetByEmail(ctx context.Context, email string) (store.User, error) {
+	return store.User{ID: "u-123", Email: "user@example.com", PasswordHash: s.hash}, nil
+}
+
 
 type assertErr struct{}
 func (assertErr) Error() string { return "not found" }
@@ -80,6 +87,46 @@ func TestLoginMultiUserUnauthorized(t *testing.T) {
 	os.Setenv("ENABLE_MULTI_USER", "true")
 	s := &Server{JWT: &fakeJWT{}, Store: fakeUserStore{}}
 	body, _ := json.Marshal(LoginRequest{Username: "x", Password: "y"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", w.Code)
+}
+}
+
+
+func TestLoginMultiUserSuccess(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "true")
+	pw := "S3curePass!"
+	hash, err := auth.HashPassword(pw)
+	if err != nil {
+		t.Fatalf("hash err: %v", err)
+	}
+	s := &Server{JWT: &fakeJWT{}, Store: storeWithHash{hash: hash}}
+	body, _ := json.Marshal(LoginRequest{Username: "user@example.com", Password: pw})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var resp LoginResponse
+	_ = json.NewDecoder(w.Body).Decode(&resp)
+	if resp.AccessToken == "" || resp.RefreshToken == "" || resp.ExpiresIn <= 0 {
+		t.Fatalf("missing tokens or expires")
+	}
+}
+
+func TestLoginMultiUserBadPassword(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "true")
+	pw := "S3curePass!"
+	hash, err := auth.HashPassword(pw)
+	if err != nil {
+		t.Fatalf("hash err: %v", err)
+	}
+	s := &Server{JWT: &fakeJWT{}, Store: storeWithHash{hash: hash}}
+	body, _ := json.Marshal(LoginRequest{Username: "user@example.com", Password: "WrongPass1!"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
 	w := httptest.NewRecorder()
 	s.Login(w, req)
