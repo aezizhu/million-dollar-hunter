@@ -71,7 +71,26 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	http.Error(w, "not implemented", http.StatusNotImplemented)
+	u, err := s.Store.GetByEmail(r.Context(), req.Username)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if err := auth.CheckPasswordHash(req.Password, u.PasswordHash); err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	access, refresh, exp, err := s.JWT.GeneratePair(u.ID, u.Email)
+	if err != nil {
+		log.Error().Err(err).Msg("generate tokens failed")
+		http.Error(w, "server error", http.StatusInternalServerError)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(LoginResponse{
+		AccessToken:  access,
+		RefreshToken: refresh,
+		ExpiresIn:    exp.Unix() - time.Now().Unix(),
+	})
 }
 
 func (s *Server) Register(w http.ResponseWriter, r *http.Request) {
