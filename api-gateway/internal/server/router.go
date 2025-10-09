@@ -1,18 +1,20 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog"
 
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/handlers"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/middleware"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/ratelimit"
-	"github.com/rs/zerolog"
 )
 
 const (
@@ -22,8 +24,32 @@ const (
 	HeaderRetryAfter    = "Retry-After"
 )
 
+func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
+	if cfg.RedisURL != "" {
+		opts := &redis.Options{Addr: cfg.RedisURL}
+		rdb := redis.NewClient(opts)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if err := rdb.Ping(ctx).Err(); err == nil {
+			rl := ratelimit.NewRedisTokenBucket(rdb, cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second, "ratelimit")
+			return limiterAdapter{rl}
+		}
+	}
+	return ratelimit.NewLocalTokenBucket(cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second)
+}
+
+type limiterAdapter struct {
+	rl interface {
+		Allow(ctx context.Context, key string) (bool, int, int, time.Time, time.Duration)
+	}
+}
+
+func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Duration) {
+	return l.rl.Allow(context.Background(), key)
+}
+
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) {
-	limiter := ratelimit.NewLocalTokenBucket(cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second)
+	limiter := newLimiter(cfg, logger)
 
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
