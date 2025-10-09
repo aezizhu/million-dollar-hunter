@@ -15,8 +15,8 @@ import (
 func TestIngestWithWiremock(t *testing.T) {
 	_ = os.Setenv("ALCHEMY_BASE_URL", "http://localhost:8080/alchemy")
 	_ = os.Setenv("MORALIS_BASE_URL", "http://localhost:8080/moralis")
-	_ = os.Setenv("REDIS_ADDR", "localhost:6380")
-	_ = os.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5433/ingestion?sslmode=disable")
+	_ = os.Setenv("REDIS_ADDR", "localhost:6379")
+	_ = os.Setenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/ingestion?sslmode=disable")
 
 	ctx := context.Background()
 	cfg, _ := config.Load()
