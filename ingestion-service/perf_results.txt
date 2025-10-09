@@ -1,0 +1,6 @@
+--- FAIL: TestIngestWithWiremock (0.00s)
+    ingest_test.go:30: failed to connect to `user=postgres database=ingestion`: 127.0.0.1:5432 (localhost): failed SASL auth: FATAL: password authentication failed for user "postgres" (SQLSTATE 28P01)
+FAIL
+exit status 1
+FAIL	github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/service	0.009s
+FAIL
