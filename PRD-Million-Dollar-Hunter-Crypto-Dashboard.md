@@ -1,357 +1,225 @@
-# PRD: Web-based On-chain Cryptocurrency Dashboard (Million $ Hunter)
+# Million Hunter: Personal On-Chain Cryptocurrency Dashboard
+
+### TL;DR
+
+Million Hunter is a highly modular, web-based on-chain cryptocurrency dashboard optimized for rapid, agent-assisted deployment and personal use by a single owner/operator. It empowers individuals to monitor, query, and analyze blockchain tokens and wallet activity in real time, emphasizing customizable analytics, technical robustness, and rapid maintainability. The solution is fast to deploy, easy to adapt, and managed entirely by autonomous AI agents with straightforward, single-user controls.
 
 ---
 
-## Overview
+## Goals
 
-Million $ Hunter is a secure, responsive, single-user web dashboard for real-time monitoring and analysis of cryptocurrency wallets and token flows. Designed for personal use by the owner/operator, the app prioritizes rapid code translation, explicit modularity, and simple technical mapping for AGI coding agents.
+### Primary Objectives
 
----
+* Deliver a modular, maintainable dashboard for personal on-chain analysis and monitoring.
 
-## Authentication & Session Management
+* Ensure agent-led, ultra-fast deployment and configuration with minimal friction.
 
-### UI Elements
+* Provide deep analytics for wallets and tokens across bsc and solana blockchains.
 
-* **Login Page:** `/login`
+* Prioritize code modularity, ease of updates, and maintainability as core values.
 
-  * Username input field (HTML `<input type="text">`)
+* Rely on a simple, hardcoded admin credential for secure, single-user access.
 
-  * Password input field (HTML `<input type="password">`)
+### Explicit Non-Goals (You need to leave sufficient room for these features to enable future expansion and prepare for when the need arises.)
 
-  * Login button (HTML `<button>`)
+* No public registration or multi-user support, dashboard need login, name: aezi, password: Aa@123456789.
 
-  * Error message area (HTML `<div>` for inline error banner)
+* No monetization, analytics for retention, or enterprise/business features for this mvp.
 
-* **Logout Button:** Shown in header/nav bar or profile menu, persistent on all authenticated routes
+* No onboarding flows, external onboarding, or growth mechanisms for now, but need to .
 
-### Technical Specifications
-
-* **Static Credentials (MVP):**
-
-  * `username = 'admin'`
-
-  * `password = 'Zz@123456789'`
-
-* **Hardcoded Authentication Logic:**
-
-  * On backend: validate provided credentials against hardcoded values.
-
-  * Passwords handled via secure POST; never exposed in client JS.
-
-  * No registration, reset, or forgotten password flows in MVP.
-
-* **Session Management:**
-
-  * Session created on successful login; JWT or secure server-managed session.
-
-  * Session expiry: 30 minutes idle timeout (auto-logout).
-
-  * On session timeout/invalid session, user is redirected to `/login` with inline error.
-
-  * All authenticated endpoints must verify valid session.
-
-* **Logout Flow:**
-
-  * Logout button triggers session/server-side token invalidation.
-
-  * Redirect to `/login` after success.
-
-* **Login Error Handling:**
-
-  * On invalid username/password, display inline error: `"Incorrect username or password."`
-
-  * Account lockout after 5 consecutive failed attempts (show banner: `"Too many failed logins. Please wait 5 minutes."`)
-
-  * All errors and lock warning shown only as web UI banners (no emails or push).
-
-* **Initial Security:**
-
-  * No third-party auth, biometric, or multifactor for MVP.
+* No trading execution or proprietary token features.
 
 ---
 
-## Front-End / Back-End Modularity
+## User Stories
 
-* **Front-End:** Pure SPA, modular React or Vue components, mapped directly to route/component names.
+**User Persona: Owner/Operator (Single User)**
 
-* **Back-End:** RESTful API/GraphQL with named endpoints, all business logic/auth, API fetch, and alert conditions implemented server-side.
+* As the Owner, I want to search by token contract address to instantly view analytics and metrics for personal research.
 
-* **Front-End never stores or processes authentication credentials locally except JWT/session token post-login.**
+* As the Owner, I want to monitor large transactions on tokens of interest, so I can quickly spot significant on-chain activity.
 
-* **Back-End exposes only authenticated APIs for dashboard, wallet data, alerts, and download/export.**
+* As the Owner, I want to view and historically track the largest holders of a specific token, helping me evaluate market centralization.
+
+* As the Owner, I want to set real-time alert triggers on wallets or tokens, so I am immediately notified of custom thresholds being crossed.
+
+* As the Owner, I want to easily compare price data across blockchains and exchanges, improving personal market insights.
+
+* As the Owner, I want customizable dashboards to focus on the KPIs that matter most to my workflow.
+
+* As the Owner, I want to export token or wallet data for my records or further offline analysis.
 
 ---
 
-## Core Views, Routes, and Components
+## Functional Requirements
 
-All routes require valid authentication except for `/login`.
+* **Token Analytics** (Highest Priority)
+
+  * Modular search input for contract address/ticker; on-demand analytics retrieval.
+
+  * Overview metrics: circulation, holders, liquidity, and prices.
+
+  * Historical and real-time charting across chosen metrics.
+
+* **Wallet & Transaction Monitoring**
+
+  * Live and historical large transaction monitors for selected tokens.
+
+  * Whale activity identifier: profile top-50 wallets, frequency, volume.
+
+  * Complete transaction details for selected wallets/tokens.
+
+* **Top Holder Analysis**
+
+  * Table of top holders with balances and ownership percentage.
+
+  * History of top holder balance changes over time.
+
+* **Price Tracking**
+
+  * Live price data from DEXes and CEXes.
+
+  * Owner-defined price or volatility alerts.
+
+* **Cross-Chain Support**
+
+  * Lookup and compare tokens across multiple blockchains (e.g. BSC, Solana).
+
+  * Blockchain context selector for the dashboard.
+
+* **Single-User Security(For mvp)**
+
+  * Simple, hardcoded admin password required for all access; no registration or invitations.
+
+  * No public-facing onboarding or profile management.
+
+* **Data Export**
+
+  * Export current view or selected data sets to CSV/JSON for further offline review.
 
 ---
 
-## Explicit Functional and UI Requirements
+## User Experience
 
-### 1\. Dashboard Analytics and Data Flow
+**Access & Interface**
 
-**Data Required (via backend API, polled every 5 seconds):**
+* Owner accesses Million Hunter via a secure, private web URL.
 
-* Wallet/Address Balances
+* First screen: basic credential prompt (hardcoded admin password only).
 
-* Capital Inflow, Outflow, Net Flow (per-address & total)
+* Instant access to core features; no onboarding, no registration.
 
-* Current token prices and interval price changes (1h/24h)
+**Core Workflow**
 
-* Large Transaction list (in/out, configurable threshold)
+1. **Dashboard Access**
 
-* Top-50 Holder grouping and activity (per token)
+  * Owner enters credential and is immediately directed to the analysis dashboard.
 
-* Real-time data update status
+2. **Token Search**
 
-**Backend Endpoints:**
+  * Prominent, modular search bar for contract address/symbol; supports autocorrect and recent history.
 
-* `POST /api/auth/login` – Auth login
+3. **Analytics View**
 
-* `POST /api/auth/logout` – Auth logout
+  * Responsive, real-time dashboard updates with token analytics, charts, price data, top holders, and live transactions.
 
-* `GET /api/wallets` – List tracked wallets
+4. **Custom Alerts**
 
-* `POST /api/wallets` – Add new wallet
+  * Owner sets up real-time alerts for price, volume, or transaction triggers.
 
-* `DELETE /api/wallets/:address` – Remove wallet
+5. **Export**
 
-* `GET /api/analytics/summary` – Current net worth, inflow, outflow, net flow
+  * On-demand data export to CSV/JSON for selected tokens, wallets, or timeframes.
 
-* `GET /api/analytics/price/:token/:chain` – Latest & interval price
+**UI/UX Principles**
 
-* `GET /api/analytics/large-tx` – List of large transactions
+* Modular, easily updatable layout.
 
-* `GET /api/analytics/holders/:token/:chain` – Top-50 holders and grouping
+* Fast-loading, with minimal waiting for analytics or history.
 
-***All endpoints require session token in*** `Authorization` ***header.***
+* Fully responsive and accessible from any device.
 
-**Token Query Input Specification:**
+* Dark/light modes, high-contrast options.
 
-* Support for BSC (Binance Smart Chain) and Solana.
-
-* Input: Contract address (HTML `<input type="text">` with chain selection dropdown).
-
-* On submit, backend validates format and fetches via respective blockchain APIs.
-
-* Error states:
-
-  * Invalid address/contract: Show inline error banner: `"Invalid contract address."`
-
-  * Unsupported chain: `"Selected network not supported."`
-
-  * No API data: `"No data available for this token."`
-
-### 2\. UI Elements/Sections
-
-Dashboard Page (`/dashboard`)
-
-* **Header:** Username label, logout button (persistent)
-
-* **Global Alert Banner:** `<div role="alert">` for system status/errors
-
-* **Token Search Form:** (HTML `<form>`)
-
-  * Input field for contract address
-
-  * Chain/network dropdown (BSC, Solana)
-
-  * Submit button
-
-* **Summary Cards:** For
-
-  * Total portfolio value
-
-  * Capital inflow (last 24h)
-
-  * Capital outflow (last 24h)
-
-  * Net flow (last 24h)
-
-  * Current token price and interval change (1h/24h)
-
-* **Tabs:** (HTML `<nav>`)
-
-  * Overview (default)
-
-  * Capital Flows
-
-  * Token Holders
-
-  * Large Transactions
-
-* **Data Tables:** (HTML `<table>`, one per tab)
-
-  * For each: columns explicitly named (see table below)
-
-  * All tables mobile-scrollable, with export CSV button
-
-* **Export/Download:** Button (HTML `<button>`) next to each data table for CSV export
-
-* **Last Updated Timestamp:** Relative timer, reload button
-
-**Table Example: Large Transactions**
-
-Wallet Manager (`/wallets`)
-
-* **Add Wallet Form**
-
-  * Input for address
-
-  * Network selector
-
-  * Confirm/Add button
-
-  * Inline validation (valid address, not duplicate)
-
-  * Success/error alerts via UI banner
-
-* **Wallet List Table**
-
-  * Address, nickname/tag, network, current balance, manage actions (remove, rename/tag)
-
-* **Remove Wallet**
-
-  * Remove button per row with confirmation (modal/dialog)
-
-  * Success/error message in banner
-
-Alert Setup (`/alerts`)
-
-* **Alert Rule Creator**
-
-  * Condition builder: amount, token, flow direction, price change percent
-
-  * Rule list table with enable/disable and delete
-
-  * Inline test alert button
-
-* **Web UI Alerts**
-
-  * Only web alerts at MVP (live banner at top or toast notification)
-
-  * No email, SMS, or push
-
-  * Alert states: match (triggered event), error (rule configuration), status (test ok)
-
-  * All alerts auto-dismiss after 10 seconds or can be closed manually
-
-Transactions (`/transactions`)
-
-* **Filterable/Sortable Table**
-
-  * Filters: date range, wallet, token, flow
-
-  * Columns: date, wallet, token, type, amount, fee, TX hash (link)
-
-  * Pagination or progressive load
-
-* **Export CSV Button**
-
-* **Empty State:** "No transactions found" banner
-
-Settings (`/settings`)
-
-* **Theme Toggle:** Light/Dark mode
-
-* **Default Currency Selector**
-
-* **Sign Out From All Devices**
-
-* **Security:**
-
-  * Display current session info (IP, browser, last login)
-
-  * "Logout Everywhere" button
-
-  * Banners for session/logout errors
+* No extraneous dialogs, gating, or multi-user UX.
 
 ---
 
-## Data Handling & Polling
+## Narrative
 
-* All main dashboard data is fetched via authenticated API every 5 seconds (adjustable).
-
-* On API fetch error (timeout >5s):
-
-  * System displays global alert banner: `"Data refresh failed, retrying..."`.
-
-  * After 3 failed attempts, show `"Connection lost. Please check your network or try again later."`
-
-  * All loading and error states clearly visible in UI.
-
-* Empty/No Data:
-
-  * Explicit banner in each section, e.g., "No activity in the last 24 hours."
-
-* Backend must de-duplicate requests from same session to avoid overload.
-
-* Real-time WebSocket/live-update support optional; initial implementation via polling.
+The owner/operator of Million Hunter is a single individual who needs powerful, rapid insights into on-chain activity for personal decision-making. They demand instant access to token analytics, customizable dashboards, and robust cross-chain data—without the complexity of team management or business-scale features. Thanks to an autonomous agent-driven architecture, the owner gets a nimble, fully-tailored experience that is simple to maintain, quick to update, and easy to extend. Agent-powered delivery allows the owner to focus strictly on their own research and analytics in a secure, single-user environment.
 
 ---
 
-## Demo User Workflow Examples
+## Success Metrics
 
-**As the owner:**
+* **Technical Robustness:** All core analytics modules function correctly, with minimal outages or query errors over repeated owner sessions.
 
-1. I log in at `/login` using `admin` and `Zz@123456789`.
+* **Owner Satisfaction:** Owner reports ease of use, speed, and fulfillment of analysis needs.
 
-2. On `/dashboard`, I use the chain/token search to query the latest status of a new contract address (BSC or Solana).
+* **Maintainability & Modularity:** Dashboard can be reconfigured or extended by the owner (or agent) in under 30 minutes, with no codebase lock-in or orphan modules.
 
-3. The dashboard displays my tracked wallets, capital flows, and price changes with up-to-date cards and tables.
+* **Deployment Speed:** New features or fixes can be deployed by autonomous agents in real-time, without manual intervention.
 
-4. In `/wallets`, I add a new address, tag it, or remove an address as needed; validation and success/errors display inline.
-
-5. In `/alerts`, I add an inflow/outflow alert; triggered events appear as a banner/toast in the UI, with a test alert for confirmation.
-
-6. On `/transactions`, I filter by date/token to review recent large transfers and export results to CSV.
-
-7. In `/settings`, I change the app to dark mode and log out everywhere for security.
-
-All errors and feedback (auth, API, data states) appear only via banners or toast notifications in the web UI.
+*No metrics for user growth, monetization, or external traction are tracked.*
 
 ---
 
-## MVP and Technical Scope Summary
+## Security
 
-* **Single user only:** No registration, roles, or invite logic.
+* Single owner/operator access only; no public login or registration.
 
-* **No direct trading, no private key capture, no crypto custody.**
+* Simple, hardcoded admin password required for all interaction.
 
-* **All persistent state managed server-side and fetched via explicit authenticated API calls.**
+* No storage of sensitive keys or personal data; only on-chain analytics, watchlists, and local/exported data.
 
-* **All navigation, UI elements, and states defined by exact route/component names above.**
-
-* **Code structure and components should support stepwise AGI generation (Devin, Claude, Codex) without ambiguity.**
-
-* **Mobile-responsive:** All UI via uniform CSS grid/flexbox, touch targets >= 44px, font size/min contrast via WCAG 2.1 AA.
+* No GDPR or compliance burdens beyond optional local encryption of exported data.
 
 ---
 
-## MVP Success & Acceptance Criteria
+## Technical Considerations
 
-* Login/logout flow works as specified with hardcoded credentials and session timeouts.
+### Platform Architecture
 
-* All dashboard data displays with explicit error/empty/loading UI and N=5s polling.
+### Data Handling & Privacy
 
-* Token query by contract address supports both BSC and Solana contracts, with clearly defined error handling.
+* All storage is local, encrypted to the device, or exportable by the owner.
 
-* All alert/event logic is visible only in the web UI (banner/toast), following defined conditions.
+* No personal data, registration details, or external analytics classes.
 
-* All tables, search forms, tabs, export/download, and theme toggle components are visibly present and function in mobile and desktop sizing.
+* All exports initiated manually by the owner; no sharing links.
 
-* Backend and frontend code is explicitly separated, modular, with endpoints and route/component mapping per this document.
+### Scalability & Performance
+
+* Single-user, single-session load; no load-balancing or cloud scaling required.
+
+* API caching and pagination optimized for one operator.
+
+* Minimal backend footprint; oriented toward rapid start/stop and maintainability.
+
+### Development & Deployment Model
+
+* All codebase changes, deployments, and tests are managed end-to-end by autonomous AI agents, based strictly on modular upgrade paths and personal owner priorities.
 
 ---
 
-## Final Notes for Developer
+## Milestones & Phasing
 
-* All technical requirements must be directly and unambiguously mappable to code artifacts.
+### Project Timeline
 
-* No business/user stories, only technical owner workflow examples.
+### Team & Roles
 
-* No external notifications or non-web delivery methods for alerts in MVP.
+* **AI Agent-Orchestrated Solo Delivery:** No other team members or multi-person coordination. All roadmap items and iterations are implemented by agents and guided directly by the owner/operator.
 
-* Maintain clean, modular, and testable code organization for AGI-assisted rapid iteration and deployment.
+### Delivery Methodology
+
+* Code is built, tested, and deployed autonomously, with reporting delivered directly to the owner.
+
+* New features, fixes, or modules are prioritized for rapid, modular extension—no gating by process or manual QA.
+
+---
+
+## Summary Table
+
+---
