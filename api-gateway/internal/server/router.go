@@ -50,9 +50,13 @@ func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Durat
 }
 
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) {
-	limiter := newLimiter(cfg, logger)
-
 	httpMetrics := observability.NewHTTPMetrics(reg, cfg.PrometheusNamespace)
+	r.Use(func(c *gin.Context) {
+		c.Set("http_metrics", httpMetrics)
+		c.Next()
+	})
+
+	limiter := newLimiter(cfg, logger)
 
 	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))

@@ -7,9 +7,11 @@ import (
 )
 
 type HTTPMetrics struct {
-	RequestsTotal    *prometheus.CounterVec
-	RequestsDuration *prometheus.HistogramVec
-	InFlight         prometheus.Gauge
+	RequestsTotal       *prometheus.CounterVec
+	RequestsDuration    *prometheus.HistogramVec
+	InFlight            prometheus.Gauge
+	RateLimitAllowed    *prometheus.CounterVec
+	RateLimitBlocked    *prometheus.CounterVec
 }
 
 func InitMetricsRegistry(cfg interface{}) *prometheus.Registry {
@@ -35,8 +37,18 @@ func NewHTTPMetrics(reg *prometheus.Registry, namespace string) *HTTPMetrics {
 			Name:      "http_requests_in_flight",
 			Help:      "Current number of in-flight requests",
 		}),
+		RateLimitAllowed: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "rate_limit_allowed_total",
+			Help:      "Total number of requests allowed by rate limiter",
+		}, []string{"route"}),
+		RateLimitBlocked: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "rate_limit_blocked_total",
+			Help:      "Total number of requests blocked by rate limiter",
+		}, []string{"route"}),
 	}
-	reg.MustRegister(m.RequestsTotal, m.RequestsDuration, m.InFlight)
+	reg.MustRegister(m.RequestsTotal, m.RequestsDuration, m.InFlight, m.RateLimitAllowed, m.RateLimitBlocked)
 	return m
 }
 

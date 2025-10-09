@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/observability"
 )
 
 const (
@@ -27,9 +29,23 @@ func RateLimit(l Limiter) gin.HandlerFunc {
 		c.Header(headerRateRemaining, strconv.Itoa(remaining))
 		c.Header(headerRateReset, strconv.FormatInt(reset.Unix(), 10))
 		if !allowed {
+			if m, ok := c.MustGet("http_metrics").(*observability.HTTPMetrics); ok && m != nil {
+				route := key
+				if route == "" {
+					route = c.Request.URL.Path
+				}
+				m.RateLimitBlocked.WithLabelValues(route).Inc()
+			}
 			c.Header(headerRetryAfter, strconv.Itoa(int(retry.Seconds())))
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate_limit", "message": "rate limit exceeded"})
 			return
+		}
+		if m, ok := c.MustGet("http_metrics").(*observability.HTTPMetrics); ok && m != nil {
+			route := key
+			if route == "" {
+				route = c.Request.URL.Path
+			}
+			m.RateLimitAllowed.WithLabelValues(route).Inc()
 		}
 		c.Next()
 	}
