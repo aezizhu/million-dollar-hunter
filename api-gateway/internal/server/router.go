@@ -26,17 +26,37 @@ const (
 )
 
 func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
+	var (
+		base ratelimit.SimpleLimiter
+		rdb  *redis.Client
+	)
 	if cfg.RedisURL != "" {
 		opts := &redis.Options{Addr: cfg.RedisURL}
-		rdb := redis.NewClient(opts)
+		rdb = redis.NewClient(opts)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		if err := rdb.Ping(ctx).Err(); err == nil {
-			rl := ratelimit.NewRedisTokenBucket(rdb, cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second, "ratelimit")
-			return limiterAdapter{rl}
+			base = ratelimit.NewRedisTokenBucket(rdb, cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second, "ratelimit")
 		}
 	}
-	return ratelimit.NewLocalTokenBucket(cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second)
+	if base == nil {
+		local := ratelimit.NewLocalTokenBucket(cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second)
+		base = ratelimit.LocalAdapter{Inner: local}
+	}
+
+	overrides, _ := ratelimit.ParseRouteLimitsJSON(cfg.RouteLimitsJSON)
+	byKey := map[string]ratelimit.SimpleLimiter{}
+	if len(overrides) > 0 {
+		for route, lim := range overrides {
+			if rdb != nil {
+				byKey[route] = ratelimit.NewRedisTokenBucket(rdb, lim.RPS, lim.Burst, time.Second, "ratelimit")
+			} else {
+				byKey[route] = ratelimit.LocalAdapter{Inner: ratelimit.NewLocalTokenBucket(lim.RPS, lim.Burst, time.Second)}
+			}
+		}
+	}
+	ml := ratelimit.NewMultiLimiter(base, byKey)
+	return limiterAdapter{ml}
 }
 
 type limiterAdapter struct {

@@ -5,16 +5,17 @@ import (
 )
 
 type Config struct {
-	Port                   string
-	RedisURL               string
-	AuthMode               string
-	AdminUser              string
-	AdminPass              string
-	OTLPEndpoint           string
-	PrometheusNamespace    string
-	RateDefaultRPS         int
-	RateDefaultBurst       int
-	OpenAPIPath            string
+	Port                string
+	RedisURL            string
+	AuthMode            string
+	AdminUser           string
+	AdminPass           string
+	OTLPEndpoint        string
+	PrometheusNamespace string
+	RateDefaultRPS      int
+	RateDefaultBurst    int
+	OpenAPIPath         string
+	RouteLimitsJSON     string
 }
 
 func getenv(k, d string) string {
@@ -25,7 +26,7 @@ func getenv(k, d string) string {
 }
 
 func Load() Config {
-	return Config{
+		return Config{
 		Port:                getenv("PORT", "8080"),
 		RedisURL:            getenv("REDIS_URL", "localhost:6379"),
 		AuthMode:            getenv("AUTH_MODE", "mvp-gate"),
@@ -36,5 +37,6 @@ func Load() Config {
 		RateDefaultRPS:      10,
 		RateDefaultBurst:    20,
 		OpenAPIPath:         getenv("OPENAPI_PATH", "../../docs/openapi.yaml"),
+		RouteLimitsJSON:     os.Getenv("ROUTE_LIMITS"),
 	}
 }
