@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/aezizhu/million-dollar-hunter/services/market-data-service/internal/cache"
 	"github.com/aezizhu/million-dollar-hunter/services/market-data-service/internal/client"
