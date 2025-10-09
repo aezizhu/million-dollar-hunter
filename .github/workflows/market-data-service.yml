@@ -123,7 +123,7 @@ jobs:
 
     - name: Start services
       working-directory: services/market-data-service
-      run: docker-compose up -d
+      run: docker compose up -d
 
     - name: Wait for services
       run: sleep 10
@@ -135,4 +135,4 @@ jobs:
     - name: Stop services
       working-directory: services/market-data-service
       if: always()
-      run: docker-compose down
+      run: docker compose down
