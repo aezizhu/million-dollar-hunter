@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/auth"
+	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
@@ -18,6 +19,10 @@ type fakeJWT struct{}
 
 func (f *fakeJWT) GeneratePair(userID, email string) (string, string, time.Time, error) {
 	return "access", "refresh", time.Now().Add(1 * time.Minute), nil
+}
+func (f *fakeJWT) ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, error) {
+	c := &jwtmgr.Claims{}
+	return c, nil
 }
 
 func TestHealth(t *testing.T) {

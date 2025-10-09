@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 	"google.golang.org/grpc"
@@ -15,6 +16,7 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/config"
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
+	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
 func main() {
@@ -25,6 +27,16 @@ func main() {
 
 	mux := http.NewServeMux()
 	s := &httpapi.Server{Logger: &log, JWT: j}
+	if os.Getenv("ENABLE_MULTI_USER") == "true" {
+		if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
+			if conn, err := pgx.Connect(context.Background(), dsn); err == nil {
+				pg := &store.PGStore{Conn: conn}
+				s.Store = pg
+				s.RefreshTokens = pg
+				s.Audit = pg
+			}
+		}
+	}
 	mux.HandleFunc("/healthz", s.Health)
 	mux.HandleFunc("/api/v1/auth/login", s.Login)
 	mux.HandleFunc("/api/v1/auth/register", s.Register)
