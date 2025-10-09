@@ -5,6 +5,7 @@ Links PRD requirements to Technical Plan sections, supporting docs, and API/spec
 | PRD Requirement | Tech Plan Section | Supporting Doc | API/Schema |
 |---|---|---|---|
 | Single-user access gate | MVP vs Future State: Authentication | security-hardening.md | Gateway hardcoded check (no API) |
+| Chain support (Solana + EVM) | Chain Support Scope | DOCUMENTATION.md, Technical Development Plan.md | openapi.yaml (oneOf EVM 0x, Solana base58); chain enums include solana |
 | Export CSV/JSON | Implementation Roadmap + Frontend | frontend-components.md | /api/v1/export/wallet/{address} |
 | Top holders history | Ingestion Responsibilities | database-migration-strategy.md | holder_snapshots schema |
 | Rate limits and budget | System Observability/Integrations | external-api-integrations.md | X-RateLimit-* headers, 429 |
