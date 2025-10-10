@@ -1,0 +1,18 @@
+{
+  "priority": 10,
+  "request": {
+    "method": "POST",
+    "urlPattern": "/alchemy/.+",
+    "bodyPatterns": [
+      { "contains": "alchemy_getAssetTransfers" },
+      { "contains": "0xerror" }
+    ]
+  },
+  "response": {
+    "status": 500,
+    "jsonBody": {
+      "error": "Internal server error"
+    },
+    "headers": { "Content-Type": "application/json" }
+  }
+}

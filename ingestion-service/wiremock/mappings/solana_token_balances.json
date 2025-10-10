@@ -1,0 +1,24 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/moralis/api/account/.+/tokens.*"
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": [
+      {
+        "mint": "So11111111111111111111111111111111111111112",
+        "amount": "1500000000",
+        "decimals": 9,
+        "uiAmount": 1.5
+      },
+      {
+        "mint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "amount": "1000000",
+        "decimals": 6,
+        "uiAmount": 1.0
+      }
+    ],
+    "headers": { "Content-Type": "application/json" }
+  }
+}

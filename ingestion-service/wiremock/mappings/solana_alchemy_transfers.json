@@ -1,0 +1,39 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPattern": "/alchemy/.+",
+    "bodyPatterns": [
+      { "contains": "alchemy_getAssetTransfers" },
+      { "matchesJsonPath": "$.params[?(@.fromAddress =~ /^[1-9A-HJ-NP-Za-km-z]{32,44}$/)]" }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": {
+      "result": {
+        "transfers": [
+          { 
+            "hash": "5xSolTx1",
+            "from": "7xSolAddr1",
+            "to": "8xSolAddr2",
+            "value": "1000000",
+            "blockNum": "0x12ab",
+            "asset": "SOL",
+            "category": "external"
+          },
+          { 
+            "hash": "5xSolTx2",
+            "from": "7xSolAddr1",
+            "to": "8xSolAddr3",
+            "value": "500000",
+            "blockNum": "0x12ac",
+            "asset": "USDC",
+            "category": "token"
+          }
+        ],
+        "pageKey": ""
+      }
+    },
+    "headers": { "Content-Type": "application/json" }
+  }
+}

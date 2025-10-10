@@ -1,0 +1,34 @@
+{
+  "priority": 5,
+  "request": {
+    "method": "GET",
+    "urlPattern": "/moralis/api/wallets/.+/balances.*",
+    "queryParameters": {
+      "chain": {
+        "matches": "solana|sol"
+      }
+    }
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": [
+      { 
+        "token": "So11111111111111111111111111111111111111112",
+        "symbol": "SOL",
+        "name": "Solana",
+        "amount": "1500000000",
+        "decimals": 9,
+        "usd": 45.0
+      },
+      {
+        "token": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        "symbol": "USDC",
+        "name": "USD Coin",
+        "amount": "1000000",
+        "decimals": 6,
+        "usd": 1.0
+      }
+    ],
+    "headers": { "Content-Type": "application/json" }
+  }
+}

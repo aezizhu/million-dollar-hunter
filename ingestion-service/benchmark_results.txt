@@ -1,0 +1,31 @@
+goos: linux
+goarch: amd64
+pkg: github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/service
+cpu: AMD EPYC
+BenchmarkIngestionThroughput-8   	{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store balances"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+{"level":"error","error":"closed pool","time":"2025-10-09T17:57:00Z","message":"store transfers"}
+1000000000	         0.0001597 ns/op	   1324547 tx/s	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/service	0.656s

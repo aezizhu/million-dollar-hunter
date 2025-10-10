@@ -1,0 +1,23 @@
+{
+  "request": {
+    "method": "GET",
+    "urlPattern": "/moralis/api/account/.+/transactions.*"
+  },
+  "response": {
+    "status": 200,
+    "jsonBody": [
+      {
+        "signature": "5xSolTx1aaabbbcccdddeeefffggghhh",
+        "slot": 123456,
+        "blockTime": 1633024800,
+        "transaction": {
+          "message": {
+            "accountKeys": ["7xSolAddr1", "8xSolAddr2"],
+            "instructions": []
+          }
+        }
+      }
+    ],
+    "headers": { "Content-Type": "application/json" }
+  }
+}
