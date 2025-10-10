@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package portfolio.v1;
+
+option go_package = "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1;v1";
+
+service PortfolioService {
+  rpc GetPortfolio(GetPortfolioRequest) returns (GetPortfolioResponse);
+  rpc Export(ExportRequest) returns (ExportResponse);
+}
+
+message GetPortfolioRequest {
+  string wallet_id = 1;
+}
+
+message Asset {
+  string token_address = 1;
+  string symbol = 2;
+  string name = 3;
+  string amount = 4;
+  double usd_value = 5;
+}
+
+message GetPortfolioResponse {
+  string wallet_id = 1;
+  repeated Asset assets = 2;
+  double total_usd_value = 3;
+}
+
+enum ExportFormat {
+  EXPORT_FORMAT_UNSPECIFIED = 0;
+  EXPORT_FORMAT_CSV = 1;
+  EXPORT_FORMAT_JSON = 2;
+}
+
+message ExportRequest {
+  string wallet_id = 1;
+  ExportFormat format = 2;
+}
+
+message ExportResponse {
+  string path = 1;
+}
