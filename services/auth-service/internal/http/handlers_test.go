@@ -143,3 +143,16 @@ func TestLoginMultiUserBadPassword(t *testing.T) {
 		t.Fatalf("expected 401, got %d", w.Code)
 	}
 }
+func TestLoginMVP_Misconfigured(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "false")
+	os.Unsetenv("MVP_USERNAME")
+	os.Unsetenv("MVP_PASSWORD")
+	s := &Server{JWT: &fakeJWT{}}
+	body, _ := json.Marshal(LoginRequest{Username: "x", Password: "y"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", w.Code)
+	}
+}
