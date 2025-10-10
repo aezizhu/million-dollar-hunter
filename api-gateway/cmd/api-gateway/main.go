@@ -28,7 +28,13 @@ func main() {
 	}()
 	reg := observability.InitMetricsRegistry(cfg)
 
-	server.MustValidateOpenAPI(cfg.OpenAPIPath)
+	if cfg.StrictOpenAPIValidation {
+		server.MustValidateOpenAPI(cfg.OpenAPIPath)
+	} else {
+		if err := server.ValidateOpenAPI(cfg.OpenAPIPath); err != nil {
+			logger.Warn().Err(err).Msg("OpenAPI validation failed, continuing")
+		}
+	}
 
 	engine := gin.New()
 	engine.Use(gin.Recovery())
@@ -38,7 +44,10 @@ func main() {
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           engine,
+		ReadTimeout:       10 * time.Second,
 		ReadHeaderTimeout: 5 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	go func() {

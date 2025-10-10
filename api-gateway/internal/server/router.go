@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -16,13 +17,7 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/middleware"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/observability"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/ratelimit"
-)
-
-const (
-	HeaderRateLimit     = "X-RateLimit-Limit"
-	HeaderRateRemaining = "X-RateLimit-Remaining"
-	HeaderRateReset     = "X-RateLimit-Reset"
-	HeaderRetryAfter    = "Retry-After"
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
 )
 
 func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
@@ -35,7 +30,10 @@ func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
 		rdb = redis.NewClient(opts)
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		if err := rdb.Ping(ctx).Err(); err == nil {
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			logger.Warn().Err(err).Msg("Redis unavailable, falling back to local rate limiter")
+		} else {
+			logger.Info().Msg("Using Redis for distributed rate limiting")
 			base = ratelimit.NewRedisTokenBucket(rdb, cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second, "ratelimit")
 		}
 	}
@@ -76,18 +74,53 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		c.Next()
 	})
 
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{cfg.FrontendURL},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", headers.RequestID},
+		ExposeHeaders:    []string{headers.RateLimit, headers.RateRemaining, headers.RateReset, headers.RetryAfter},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
+	r.Use(func(c *gin.Context) {
+		rid := c.GetHeader(headers.RequestID)
+		if rid == "" {
+			rid = time.Now().UTC().Format("20060102150405.000000000")
+		}
+		c.Set("request_id", rid)
+		c.Header(headers.RequestID, rid)
+		c.Next()
+	})
+
 	limiter := newLimiter(cfg, logger)
 
-	r.GET("/healthz", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
+	r.GET("/healthz", func(c *gin.Context) {
+		health := gin.H{"ok": true}
+		status := http.StatusOK
+		if cfg.RedisURL != "" {
+			opts := &redis.Options{Addr: cfg.RedisURL}
+			rdb := redis.NewClient(opts)
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 1*time.Second)
+			defer cancel()
+			if err := rdb.Ping(ctx).Err(); err != nil {
+				health["redis"] = "unhealthy"
+				status = http.StatusServiceUnavailable
+			} else {
+				health["redis"] = "ok"
+			}
+		}
+		c.JSON(status, health)
+	})
 	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
 
 	r.POST("/api/v1/auth/login", handlers.Login(cfg))
-	r.POST("/api/v1/auth/refresh", handlers.Refresh())
+	r.POST("/api/v1/auth/refresh", handlers.Refresh(cfg))
 
 	api := r.Group("/api/v1")
-	api.Use(middleware.Auth(cfg))
-	api.Use(middleware.RateLimit(limiter))
 	api.Use(middleware.Metrics(httpMetrics))
+	api.Use(middleware.RateLimit(limiter))
+	api.Use(middleware.Auth(cfg))
 	api.Use(middleware.Tracing())
 
 	api.GET("/portfolios", handlers.ListPortfolios())

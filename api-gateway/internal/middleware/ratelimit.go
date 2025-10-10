@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -8,13 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/observability"
-)
-
-const (
-	headerRateLimit     = "X-RateLimit-Limit"
-	headerRateRemaining = "X-RateLimit-Remaining"
-	headerRateReset     = "X-RateLimit-Reset"
-	headerRetryAfter    = "Retry-After"
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
 )
 
 type Limiter interface {
@@ -23,28 +18,34 @@ type Limiter interface {
 
 func RateLimit(l Limiter) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		key := c.FullPath()
+		baseKey := c.FullPath()
+		uid := c.GetString("user_id")
+		if uid == "" {
+			uid = c.ClientIP()
+		}
+		key := fmt.Sprintf("%s:%s", baseKey, uid)
+
 		allowed, limit, remaining, reset, retry := l.Allow(key)
-		c.Header(headerRateLimit, strconv.Itoa(limit))
-		c.Header(headerRateRemaining, strconv.Itoa(remaining))
-		c.Header(headerRateReset, strconv.FormatInt(reset.Unix(), 10))
+		c.Header(headers.RateLimit, strconv.Itoa(limit))
+		c.Header(headers.RateRemaining, strconv.Itoa(remaining))
+		c.Header(headers.RateReset, strconv.FormatInt(reset.Unix(), 10))
 		if !allowed {
 			if v, exists := c.Get("http_metrics"); exists {
 				if m, ok := v.(*observability.HTTPMetrics); ok && m != nil {
-					route := key
+					route := baseKey
 					if route == "" {
 						route = c.Request.URL.Path
 					}
 					m.RateLimitBlocked.WithLabelValues(route).Inc()
 				}
 			}
-			c.Header(headerRetryAfter, strconv.Itoa(int(retry.Seconds())))
+			c.Header(headers.RetryAfter, strconv.Itoa(int(retry.Seconds())))
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate_limit", "message": "rate limit exceeded"})
 			return
 		}
 		if v, exists := c.Get("http_metrics"); exists {
 			if m, ok := v.(*observability.HTTPMetrics); ok && m != nil {
-				route := key
+				route := baseKey
 				if route == "" {
 					route = c.Request.URL.Path
 				}

@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -15,25 +17,61 @@ type loginReq struct {
 
 func Login(cfg config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var lr loginReq
-		if err := c.ShouldBindJSON(&lr); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "validation_error", "message": "invalid request"})
+		if cfg.AuthServiceURL == "" {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service_unavailable", "message": "auth service not configured"})
 			return
 		}
-		if cfg.AuthMode == "mvp-gate" {
-			if lr.Email == cfg.AdminUser && lr.Password == cfg.AdminPass {
-				c.JSON(http.StatusOK, gin.H{"accessToken": "dev-access", "refreshToken": "dev-refresh"})
-				return
+		body, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "validation_error"})
+			return
+		}
+		req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, cfg.AuthServiceURL+"/api/v1/auth/login", bytes.NewReader(body))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "service_unavailable"})
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service_unavailable"})
+			return
+		}
+		defer resp.Body.Close()
+		for k, vals := range resp.Header {
+			for _, v := range vals {
+				c.Writer.Header().Add(k, v)
 			}
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized", "message": "invalid credentials"})
-			return
 		}
-		c.JSON(http.StatusOK, gin.H{"accessToken": "dev-access", "refreshToken": "dev-refresh"})
+		c.Status(resp.StatusCode)
+		io.Copy(c.Writer, resp.Body)
 	}
 }
 
-func Refresh() gin.HandlerFunc {
+func Refresh(cfg config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"accessToken": "dev-access"})
+		if cfg.AuthServiceURL == "" {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service_unavailable"})
+			return
+		}
+		req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, cfg.AuthServiceURL+"/api/v1/auth/refresh", c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "service_unavailable"})
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service_unavailable"})
+			return
+		}
+		defer resp.Body.Close()
+		for k, vals := range resp.Header {
+			for _, v := range vals {
+				c.Writer.Header().Add(k, v)
+			}
+		}
+		c.Status(resp.StatusCode)
+		io.Copy(c.Writer, resp.Body)
 	}
 }

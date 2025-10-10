@@ -6,15 +6,15 @@ import (
 )
 
 type LocalTokenBucket struct {
-	mu       sync.Mutex
-	rate     int
-	burst    int
-	interval time.Duration
-	state    map[string]*bucket
+	mu        sync.Mutex
+	rate      int
+	burst     int
+	interval  time.Duration
+	state     map[string]*bucket
 }
 
 type bucket struct {
-	tokens   int
+	tokens     int
 	lastRefill time.Time
 }
 
@@ -37,13 +37,15 @@ func (l *LocalTokenBucket) refill(b *bucket, now time.Time) {
 	if elapsed <= 0 {
 		return
 	}
-	add := int(elapsed / l.interval) * l.rate
+	tokensToAdd := float64(elapsed) / float64(l.interval) * float64(l.rate)
+	add := int(tokensToAdd)
 	if add > 0 {
 		b.tokens += add
 		if b.tokens > l.burst {
 			b.tokens = l.burst
 		}
-		b.lastRefill = now
+		advance := time.Duration(float64(add) / float64(l.rate) * float64(l.interval))
+		b.lastRefill = b.lastRefill.Add(advance)
 	}
 }
 

@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
 )
 
 type stubLimiter struct {
@@ -46,16 +48,16 @@ func TestRateLimitAllowed(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	if got := w.Header().Get(headerRateLimit); got != "10" {
+	if got := w.Header().Get(headers.RateLimit); got != "10" {
 		t.Fatalf("X-RateLimit-Limit expected 10, got %s", got)
 	}
-	if got := w.Header().Get(headerRateRemaining); got != "9" {
+	if got := w.Header().Get(headers.RateRemaining); got != "9" {
 		t.Fatalf("X-RateLimit-Remaining expected 9, got %s", got)
 	}
-	if got := w.Header().Get(headerRateReset); got == "" {
+	if got := w.Header().Get(headers.RateReset); got == "" {
 		t.Fatalf("X-RateLimit-Reset expected set")
 	}
-	if got := w.Header().Get(headerRetryAfter); got != "" {
+	if got := w.Header().Get(headers.RetryAfter); got != "" {
 		t.Fatalf("Retry-After should be empty when allowed, got %s", got)
 	}
 }
@@ -77,16 +79,16 @@ func TestRateLimitBlocked(t *testing.T) {
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d", w.Code)
 	}
-	if got := w.Header().Get(headerRateLimit); got != "10" {
+	if got := w.Header().Get(headers.RateLimit); got != "10" {
 		t.Fatalf("X-RateLimit-Limit expected 10, got %s", got)
 	}
-	if got := w.Header().Get(headerRateRemaining); got != "0" {
+	if got := w.Header().Get(headers.RateRemaining); got != "0" {
 		t.Fatalf("X-RateLimit-Remaining expected 0, got %s", got)
 	}
-	if got := w.Header().Get(headerRateReset); got == "" {
+	if got := w.Header().Get(headers.RateReset); got == "" {
 		t.Fatalf("X-RateLimit-Reset expected set")
 	}
-	if got := w.Header().Get(headerRetryAfter); got != "0" && got != "1" {
+	if got := w.Header().Get(headers.RetryAfter); got != "0" && got != "1" {
 		t.Fatalf("Retry-After expected small integer seconds, got %s", got)
 	}
 }
