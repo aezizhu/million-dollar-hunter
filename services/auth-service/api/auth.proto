@@ -1,0 +1,31 @@
+syntax = "proto3";
+package auth.v1;
+option go_package = "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen;gen";
+
+message TokenRequest {
+  string user_id = 1;
+  string email = 2;
+}
+
+message TokenPair {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64  expires_in = 3;
+}
+
+message ValidateRequest {
+  string token = 1;
+  string expected_aud = 2;
+}
+
+message ValidateResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string email = 3;
+  string reason = 4;
+}
+
+service AuthService {
+  rpc GenerateTokens(TokenRequest) returns (TokenPair);
+  rpc ValidateToken(ValidateRequest) returns (ValidateResponse);
+}

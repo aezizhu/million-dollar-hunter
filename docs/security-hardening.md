@@ -23,6 +23,8 @@
 ## AuthN/Z
 - MVP gate with hardcoded credential at API Gateway.
 - JWT scaffolding ready; rotate keys; short-lived tokens; audience/issuer checks when enabled.
+- JWT issuer/audience enforced; short-lived access tokens; refresh tokens supported; secrets via env only.
+
 
 ## Logging & Privacy
 - Avoid sensitive data in logs; mask secrets; structured logs only.

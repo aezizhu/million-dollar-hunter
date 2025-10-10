@@ -15,12 +15,14 @@ Source: `openapi.yaml` - API Gateway (Agent B)
 | Endpoint | Method | Status | Owner | Notes |
 |----------|--------|--------|-------|-------|
 | `/api/v1/auth/register` | POST | Not Started | Agent A | User registration for post-MVP |
-| `/api/v1/auth/login` | POST | Not Started | Agent A | MVP: Hardcoded credential check |
-| `/api/v1/auth/refresh` | POST | Not Started | Agent A | Token refresh for post-MVP |
+| `/api/v1/auth/login` | POST | Implemented | Agent A | MVP: Hardcoded credential check; returns JWT pair |
+| `/api/v1/auth/refresh` | POST | Not Implemented | Agent A | MVP returns 501; to be enabled post multi-user |
 
 **Implementation Notes**:
 - MVP uses hardcoded credentials: username `aezi`, password `Aa@123456789`
 - JWT generation/validation scaffolded but disabled in MVP
+- auth-service REST login endpoint available at `/api/v1/auth/login` (MVP hardcoded check; returns JWT pair). gRPC `auth.proto` defined under `services/auth-service/api/auth.proto`.
+
 - Registration endpoint stubbed for future multi-user support
 
 ---
@@ -77,10 +79,10 @@ Source: `openapi.yaml` - API Gateway (Agent B)
 
 | RPC Method | Status | Purpose | Notes |
 |------------|--------|---------|-------|
-| `ValidateToken` | Not Started | Validate JWT token | Called by API Gateway |
-| `GenerateTokens` | Not Started | Generate access + refresh tokens | Called internally on login |
+| `ValidateToken` | In Progress | Validate JWT token | Claims and manager in place; server stub TBD |
+| `GenerateTokens` | In Progress | Generate access + refresh tokens | JWT manager implemented; gRPC server TBD |
 
-**Proto File**: `api/auth.proto` (To be created by Agent A)
+**Proto File**: `services/auth-service/api/auth.proto`
 
 ---
 
