@@ -16,6 +16,7 @@ export const options = {
     'http_req_duration': ['p(95)<500'], // Allow higher latency under stress
     'http_req_failed': ['rate<0.05'],   // Allow 5% error rate under stress
   },
+  timeout: '10s', // Fail requests taking longer than 10s
 };
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:8080';
@@ -28,7 +29,7 @@ export function setup() {
   if (!AUTH_EMAIL || !AUTH_PASSWORD) {
     throw new Error(
       'Missing required environment variables: AUTH_EMAIL and AUTH_PASSWORD must be set.\n' +
-      'Example: k6 run -e AUTH_EMAIL=user@example.com -e AUTH_PASSWORD=secret stress-test.js'
+      'Example: k6 run -e AUTH_EMAIL=$TEST_EMAIL -e AUTH_PASSWORD=$TEST_PASSWORD stress-test.js'
     );
   }
 
@@ -89,10 +90,11 @@ export default function(data) {
     rateLimitExceeded.add(1);
   }
 
-  check(res, {
+  const checksOk = check(res, {
     'status is 200 or 429': (r) => r.status === 200 || r.status === 429,
     'response time < 1s': (r) => r.timings.duration < 1000,
-  }) || errorRate.add(1);
+  });
+  if (!checksOk) errorRate.add(1);
 
   sleep(0.5);
 }

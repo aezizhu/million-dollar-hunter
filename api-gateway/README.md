@@ -36,11 +36,11 @@ All configuration via environment variables (see `.env.example`):
 |----------|-------------|---------|
 | `PORT` | Server port | `8080` |
 | `JWT_SECRET` | JWT signing secret for validation | (required) |
-| `REDIS_URL` | Redis connection URL | `localhost:6379` |
+| `REDIS_URL` | Redis connection URL (format: `redis://host:port` for TCP, `localhost:6379` for default, `rediss://host:port` for TLS) | `localhost:6379` |
 | `AUTH_SERVICE_URL` | Auth service base URL for login/refresh | (required) |
 | `FRONTEND_URL` | CORS allowed origin (comma-separated list; **NEVER use `*` with credentials**) | (required in production) |
 | `OPENAPI_PATH` | Path to OpenAPI spec for validation | `../docs/openapi.yaml` |
-| `STRICT_OPENAPI_VALIDATION` | Fail startup on validation errors (**recommended `true` in production**) | `false` |
+| `STRICT_OPENAPI_VALIDATION` | Fail startup if OpenAPI spec has syntax errors or cannot be loaded (**recommended `true` in production to catch config issues early**) | `false` |
 | `RATE_DEFAULT_RPS` | Default rate limit (requests/second) | `10` |
 | `RATE_DEFAULT_BURST` | Default burst capacity | `20` |
 | `ROUTE_LIMITS` | Per-route rate limit overrides (JSON) | (optional) |
@@ -62,9 +62,9 @@ RATE_DEFAULT_BURST=20    # Burst capacity of 20 requests
 
 **Per-route overrides** (JSON format):
 
-Shell-escaped example:
+Shell-safe example (single quotes, no escaping needed):
 ```bash
-ROUTE_LIMITS='{"\/api\/v1\/portfolios":{"rps":5,"burst":10},"\/api\/v1\/wallets\/:address":{"rps":2,"burst":4}}'
+ROUTE_LIMITS='{"/api/v1/portfolios":{"rps":5,"burst":10},"/api/v1/wallets/:address":{"rps":2,"burst":4}}'
 ```
 
 Plain JSON (validate with `jq`):
@@ -83,7 +83,7 @@ echo "$ROUTE_LIMITS" | jq . || echo "Invalid JSON"
 
 **Behavior**:
 - Unknown routes fall back to default limits
-- Invalid JSON will cause startup failure with error logged
+- Invalid JSON format will cause startup failure with error logged
 - Route limit key includes route + user_id (from JWT) or client IP as fallback
 
 Supports Redis (distributed) or in-memory backends.
@@ -92,11 +92,11 @@ Supports Redis (distributed) or in-memory backends.
 
 ### Health Endpoints
 
-**Liveness Probe**: `GET /healthz`
+**Health Check**: `GET /healthz`
 - Returns 200 if service process is running
-- When `REDIS_URL` is set, also checks Redis connectivity
-- Use for Kubernetes liveness probes
-- **Never** terminates healthy processes
+- When `REDIS_URL` is set, also performs shallow Redis connectivity check
+- **Use Case**: Kubernetes liveness and readiness probes
+- **Note**: In production, consider separating liveness (process alive) from readiness (dependencies healthy) if deep dependency checks are needed
 
 **Metrics**: `GET /metrics`
 - Prometheus exposition format
