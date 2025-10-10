@@ -2,7 +2,7 @@
 
 ## Overview
 - Go microservice providing JWT issuance and validation.
-- For MVP, `/api/v1/auth/login` accepts hardcoded credentials (username: aezi, password: Aa@123456789) and returns access/refresh tokens. Multi-user is feature-gated.
+- For MVP, `/api/v1/auth/login` uses env-configured credentials and returns access/refresh tokens. Multi-user is feature-gated and enables DB-backed auth flows.
 
 ## Structure
 - services/auth-service/
@@ -14,11 +14,13 @@
   - internal/store/postgres.go
   - api/auth.proto
   - db/migrations/
+- Uses pgxpool for PostgreSQL connection pooling
+
 
 ## HTTP Endpoints (MVP)
-- POST `/api/v1/auth/login` — returns access_token, refresh_token, expires_in (hardcoded single-user)
-- POST `/api/v1/auth/logout` — stateless logout, returns ok
-- POST `/api/v1/auth/refresh` — returns 501 Not Implemented for MVP (enabled post multi-user)
+- POST `/api/v1/auth/login` — returns access_token, refresh_token, expires_in
+- POST `/api/v1/auth/logout` — stateless logout (MVP); revokes refresh tokens in multi-user mode
+- POST `/api/v1/auth/refresh` — 501 in MVP; enabled with rotation and persistence when `ENABLE_MULTI_USER=true`
 
 ## Middleware
 - `WithAuth` JWT middleware validates Authorization: Bearer <token> with issuer/audience checks and injects claims into request context via `ClaimsFromContext`.
@@ -27,13 +29,17 @@
 - PORT, GRPC_PORT
 - DATABASE_URL
 - JWT_ISSUER, JWT_AUDIENCE
+- MVP_USERNAME
+- MVP_PASSWORD_BCRYPT
+
 - JWT_SIGNING_KEY
 - JWT_ACCESS_TTL_MINUTES, JWT_REFRESH_TTL_HOURS
 - ENABLE_MULTI_USER
 
 ## Security
-- JWT with HS256, short-lived access tokens; issuer/audience checks.
-- Env-only secrets; default dev key must be overridden.
+- JWT with HS256, short-lived access tokens; issuer/audience checks; unique JTI for rotation.
+- Env-only secrets; default dev key must be overridden; MVP creds via env using bcrypt hash.
+- Timing-attack mitigation on login: bcrypt check even when user not found.
 - Structured JSON logs; avoid sensitive payloads in logs.
 
 ## Migrations
