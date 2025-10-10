@@ -25,6 +25,8 @@ type Config struct {
 	
 	LogLevel string
 	
+	CORSAllowedOrigins string
+	
 	MVPUsername string
 	MVPPassword string
 }
@@ -43,6 +45,7 @@ func Load() (*Config, error) {
 		PortfolioServiceAddr:  getEnv("PORTFOLIO_SERVICE_ADDR", "localhost:50052"),
 		MarketDataServiceAddr: getEnv("MARKET_DATA_SERVICE_ADDR", "localhost:50053"),
 		LogLevel:              getEnv("LOG_LEVEL", "info"),
+		CORSAllowedOrigins:    getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"),
 		MVPUsername:           getEnv("MVP_USERNAME", "aezi"),
 		MVPPassword:           getEnv("MVP_PASSWORD", "Aa@123456789"),
 	}
@@ -61,6 +64,21 @@ func (c *Config) Validate() error {
 	if c.RedisAddr == "" {
 		return fmt.Errorf("REDIS_ADDR cannot be empty")
 	}
+	if c.JWTExpiryMinutes <= 0 {
+		return fmt.Errorf("JWT_EXPIRY_MINUTES must be greater than 0")
+	}
+	if c.RateLimitPerMinute <= 0 {
+		return fmt.Errorf("RATE_LIMIT_PER_MINUTE must be greater than 0")
+	}
+	if c.RateLimitBurst <= 0 {
+		return fmt.Errorf("RATE_LIMIT_BURST must be greater than 0")
+	}
+	
+	validLogLevels := map[string]bool{"debug": true, "info": true, "warn": true, "warning": true, "error": true}
+	if !validLogLevels[c.LogLevel] {
+		return fmt.Errorf("LOG_LEVEL must be one of: debug, info, warn, error")
+	}
+	
 	return nil
 }
 

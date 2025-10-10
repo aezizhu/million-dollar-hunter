@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -68,7 +69,7 @@ func main() {
 	router.Use(gin.Recovery())
 	router.Use(requestLogger(logger))
 	router.Use(metrics.PrometheusMiddleware())
-	router.Use(corsMiddleware())
+	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 
 	router.GET("/health", healthHandler.Health)
 	router.GET("/healthz", healthHandler.Liveness)
@@ -162,10 +163,17 @@ func requestLogger(logger zerolog.Logger) gin.HandlerFunc {
 	}
 }
 
-func corsMiddleware() gin.HandlerFunc {
+func corsMiddleware(allowedOrigins string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		origin := c.Request.Header.Get("Origin")
+		
+		if allowedOrigins == "*" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		} else if origin != "" && isOriginAllowed(origin, allowedOrigins) {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
+		
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
 
@@ -176,4 +184,14 @@ func corsMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func isOriginAllowed(origin, allowedOrigins string) bool {
+	origins := strings.Split(allowedOrigins, ",")
+	for _, allowed := range origins {
+		if strings.TrimSpace(allowed) == origin {
+			return true
+		}
+	}
+	return false
 }
