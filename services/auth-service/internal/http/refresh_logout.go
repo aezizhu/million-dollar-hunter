@@ -37,10 +37,6 @@ func (s *Server) Refresh(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if s.RefreshTokens == nil {
-		http.Error(w, "not implemented", http.StatusNotImplemented)
-		return
-	}
 	now := time.Now()
 	if _, err := s.RefreshTokens.GetValidRefreshToken(r.Context(), req.RefreshToken, now); err != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)

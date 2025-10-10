@@ -57,7 +57,13 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if os.Getenv("ENABLE_MULTI_USER") != "true" {
-		if req.Username != "aezi" || req.Password != "Aa@123456789" {
+		mvpUser := os.Getenv("MVP_USERNAME")
+		mvpPass := os.Getenv("MVP_PASSWORD")
+		if mvpUser == "" || mvpPass == "" {
+			http.Error(w, "server misconfigured", http.StatusInternalServerError)
+			return
+		}
+		if req.Username != mvpUser || req.Password != mvpPass {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -75,8 +81,10 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	dummy := "$2a$10$1iKqkQ6q6o0t8W9u2pF1uOm5b2mSgT3j1bJ5o7fOAkf0vZK3Jk5e2"
 	u, err := s.Store.GetByEmail(r.Context(), req.Username)
 	if err != nil {
+		_ = auth.CheckPasswordHash(req.Password, dummy)
 		if s.Audit != nil {
 			_ = s.Audit.Log(r.Context(), nil, "login_failure", nil, nil)
 		}

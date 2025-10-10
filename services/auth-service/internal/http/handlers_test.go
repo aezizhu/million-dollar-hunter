@@ -37,6 +37,8 @@ func TestHealth(t *testing.T) {
 
 func TestLoginMVP(t *testing.T) {
 	os.Setenv("ENABLE_MULTI_USER", "false")
+	os.Setenv("MVP_USERNAME", "aezi")
+	os.Setenv("MVP_PASSWORD", "Aa@123456789")
 	s := &Server{JWT: &fakeJWT{}}
 	body, _ := json.Marshal(LoginRequest{Username: "aezi", Password: "Aa@123456789"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
@@ -54,6 +56,8 @@ func TestLoginMVP(t *testing.T) {
 
 func TestLoginUnauthorized(t *testing.T) {
 	os.Setenv("ENABLE_MULTI_USER", "false")
+	os.Setenv("MVP_USERNAME", "aezi")
+	os.Setenv("MVP_PASSWORD", "Aa@123456789")
 	s := &Server{JWT: &fakeJWT{}}
 	body, _ := json.Marshal(LoginRequest{Username: "bad", Password: "nope"})
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))

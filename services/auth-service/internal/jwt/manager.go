@@ -2,6 +2,7 @@ package jwtmgr
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -44,7 +45,7 @@ func (m *Manager) GenerateToken(userID, email string, ttl time.Duration) (string
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(exp),
 			NotBefore: jwt.NewNumericDate(now),
-			ID:        "",
+			ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
 		},
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -79,27 +80,27 @@ func (m *Manager) ValidateToken(tokenStr string, expectedAud string) (*Claims, e
 	if claims.Issuer != m.issuer {
 		return nil, errors.New("invalid issuer")
 	}
-	if expectedAud != "" {
-		found := false
-		for _, aud := range claims.Audience {
-			if aud == expectedAud {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return nil, errors.New("invalid audience")
-		}
-	}
-	foundCfg := false
+	hasCfg := false
 	for _, aud := range claims.Audience {
 		if aud == m.audience {
-			foundCfg = true
+			hasCfg = true
 			break
 		}
 	}
-	if !foundCfg {
-		return nil, errors.New("invalid audience")
+	if !hasCfg {
+		return nil, errors.New("token missing required audience")
+	}
+	if expectedAud != "" && expectedAud != m.audience {
+		hasExp := false
+		for _, aud := range claims.Audience {
+			if aud == expectedAud {
+				hasExp = true
+				break
+			}
+		}
+		if !hasExp {
+			return nil, fmt.Errorf("token missing expected audience: %s", expectedAud)
+		}
 	}
 	return claims, nil
 }
