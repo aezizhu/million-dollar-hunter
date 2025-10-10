@@ -61,6 +61,52 @@ func TestRefreshUnauthorized_InvalidJWTSignature(t *testing.T) {
 		t.Fatalf("expected 401 when JWT signature invalid, got %d", w.Code)
 	}
 }
+type fakeRefreshRevokeErr struct{ called bool }
+func (f *fakeRefreshRevokeErr) CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) (store.RefreshToken, error) {
+	return store.RefreshToken{Token: token, UserID: userID, ExpiresAt: expiresAt}, nil
+}
+func (f *fakeRefreshRevokeErr) GetValidRefreshToken(ctx context.Context, token string, now time.Time) (store.RefreshToken, error) {
+	return store.RefreshToken{Token: token, UserID: "u-1", ExpiresAt: now.Add(5 * time.Minute)}, nil
+}
+func (f *fakeRefreshRevokeErr) RevokeRefreshToken(ctx context.Context, token string) error { f.called = true; return assertErr{} }
+func (f *fakeRefreshRevokeErr) RevokeAllForUser(ctx context.Context, userID string) error { return nil }
+
+func TestRefresh_RevokeErrorReturns401(t *testing.T) {
+	m := jwtmgr.New("mdh-auth", "mdh-api", time.Minute, 5*time.Minute, []byte("k"))
+	_, refresh, _, _ := m.GeneratePair("u-1", "u@example.com")
+	s := &Server{JWT: &jwtFixed{j: m}, RefreshTokens: &fakeRefreshRevokeErr{}}
+	body, _ := json.Marshal(RefreshRequest{RefreshToken: refresh})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Refresh(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 when revoke fails, got %d", w.Code)
+	}
+}
+
+type fakeRefreshCreateErr struct{}
+func (f *fakeRefreshCreateErr) CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) (store.RefreshToken, error) {
+	return store.RefreshToken{}, assertErr{}
+}
+func (f *fakeRefreshCreateErr) GetValidRefreshToken(ctx context.Context, token string, now time.Time) (store.RefreshToken, error) {
+	return store.RefreshToken{Token: token, UserID: "u-1", ExpiresAt: now.Add(5 * time.Minute)}, nil
+}
+func (f *fakeRefreshCreateErr) RevokeRefreshToken(ctx context.Context, token string) error { return nil }
+func (f *fakeRefreshCreateErr) RevokeAllForUser(ctx context.Context, userID string) error { return nil }
+
+func TestRefresh_CreatePersistErrorReturns500(t *testing.T) {
+	m := jwtmgr.New("mdh-auth", "mdh-api", time.Minute, 5*time.Minute, []byte("k"))
+	_, refresh, _, _ := m.GeneratePair("u-1", "u@example.com")
+	s := &Server{JWT: &jwtFixed{j: m}, RefreshTokens: &fakeRefreshCreateErr{}}
+	body, _ := json.Marshal(RefreshRequest{RefreshToken: refresh})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Refresh(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when persist fails, got %d", w.Code)
+	}
+}
+
 
 type fakeAudit struct{ lastEvent string; lastUser *string }
 func (f *fakeAudit) Log(ctx context.Context, userID *string, event string, ip *string, ua *string) error { f.lastEvent = event; f.lastUser = userID; return nil }
