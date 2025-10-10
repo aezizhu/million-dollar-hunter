@@ -186,3 +186,38 @@ func TestLoginMultiUser_Lockout(t *testing.T) {
 		t.Fatalf("expected 429, got %d", w.Code)
 	}
 }
+type fakeRefreshPersist struct {
+	called bool
+	user   string
+	token  string
+	exp    time.Time
+}
+func (f *fakeRefreshPersist) CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) (store.RefreshToken, error) {
+	f.called, f.user, f.token, f.exp = true, userID, token, expiresAt
+	return store.RefreshToken{UserID: userID, Token: token, ExpiresAt: expiresAt}, nil
+}
+func (f *fakeRefreshPersist) GetValidRefreshToken(ctx context.Context, token string, now time.Time) (store.RefreshToken, error) {
+	return store.RefreshToken{}, assertErr{}
+}
+func (f *fakeRefreshPersist) RevokeRefreshToken(ctx context.Context, token string) error { return nil }
+func (f *fakeRefreshPersist) RevokeAllForUser(ctx context.Context, userID string) error { return nil }
+
+func TestLoginMultiUserSuccess_PersistRefresh(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "true")
+	defer os.Unsetenv("ENABLE_MULTI_USER")
+	pw := "S3curePass!"
+	hash, err := auth.HashPassword(pw)
+	if err != nil { t.Fatalf("hash err: %v", err) }
+	ref := &fakeRefreshPersist{}
+	s := &Server{JWT: &fakeJWT{}, Store: storeWithHash{hash: hash}, RefreshTokens: ref}
+	body, _ := json.Marshal(LoginRequest{Username: "user@example.com", Password: pw})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if !ref.called || ref.user == "" || ref.token == "" || ref.exp.Before(time.Now()) {
+		t.Fatalf("expected refresh token persisted")
+	}
+}
