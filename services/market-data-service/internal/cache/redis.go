@@ -127,8 +127,15 @@ func (c *RedisCache) GetMultiplePrices(ctx context.Context, tokens []TokenIdenti
 			continue
 		}
 
+		strVal, ok := val.(string)
+		if !ok {
+			c.logger.Error().Str("key", keys[i]).Msg("Unexpected value type in cache")
+			misses = append(misses, tokens[i])
+			continue
+		}
+
 		var price CachedPrice
-		if err := json.Unmarshal([]byte(val.(string)), &price); err != nil {
+		if err := json.Unmarshal([]byte(strVal), &price); err != nil {
 			c.logger.Error().Err(err).Str("key", keys[i]).Msg("Failed to unmarshal cached price")
 			misses = append(misses, tokens[i])
 			continue
@@ -155,6 +162,7 @@ func (c *RedisCache) SetMultiplePrices(ctx context.Context, prices []*CachedPric
 
 	pipe := c.client.Pipeline()
 	now := time.Now()
+	var failedTokens []string
 
 	for _, price := range prices {
 		key := c.priceKey(price.TokenAddress, price.Chain)
@@ -162,6 +170,7 @@ func (c *RedisCache) SetMultiplePrices(ctx context.Context, prices []*CachedPric
 
 		data, err := json.Marshal(price)
 		if err != nil {
+			failedTokens = append(failedTokens, price.TokenAddress)
 			c.logger.Error().Err(err).Str("token", price.TokenAddress).Msg("Failed to marshal price")
 			continue
 		}
@@ -171,6 +180,14 @@ func (c *RedisCache) SetMultiplePrices(ctx context.Context, prices []*CachedPric
 
 	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("failed to execute pipeline: %w", err)
+	}
+
+	if len(failedTokens) > 0 {
+		c.logger.Warn().
+			Int("failed_count", len(failedTokens)).
+			Strs("failed_tokens", failedTokens).
+			Msg("Some tokens failed to cache")
+		return fmt.Errorf("failed to cache %d tokens: %v", len(failedTokens), failedTokens)
 	}
 
 	c.logger.Debug().

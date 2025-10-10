@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/aezizhu/million-dollar-hunter/services/market-data-service/internal/cache"
 	"github.com/aezizhu/million-dollar-hunter/services/market-data-service/internal/client"
@@ -10,6 +12,8 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/services/market-data-service/internal/worker"
 	"github.com/aezizhu/million-dollar-hunter/services/market-data-service/pkg/pb"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type GRPCHandler struct {
@@ -38,6 +42,13 @@ func NewGRPCHandler(
 }
 
 func (h *GRPCHandler) GetTokenPrice(ctx context.Context, req *pb.GetTokenPriceRequest) (*pb.GetTokenPriceResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if err := validateTokenRequest(req.TokenAddress, req.Chain); err != nil {
+		return nil, err
+	}
+
 	h.logger.Debug().
 		Str("token", req.TokenAddress).
 		Str("chain", req.Chain).
@@ -126,6 +137,9 @@ func (h *GRPCHandler) GetTokenPrice(ctx context.Context, req *pb.GetTokenPriceRe
 }
 
 func (h *GRPCHandler) GetTokenPrices(ctx context.Context, req *pb.GetTokenPricesRequest) (*pb.GetTokenPricesResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	h.logger.Debug().
 		Int("count", len(req.Tokens)).
 		Msg("GetTokenPrices request")
@@ -134,12 +148,32 @@ func (h *GRPCHandler) GetTokenPrices(ctx context.Context, req *pb.GetTokenPrices
 		return &pb.GetTokenPricesResponse{Prices: []*pb.TokenPrice{}}, nil
 	}
 
-	tokens := make([]cache.TokenIdentifier, len(req.Tokens))
-	for i, t := range req.Tokens {
-		tokens[i] = cache.TokenIdentifier{
+	seen := make(map[string]bool)
+	var tokens []cache.TokenIdentifier
+	for _, t := range req.Tokens {
+		if err := validateTokenRequest(t.TokenAddress, t.Chain); err != nil {
+			h.logger.Warn().
+				Str("token", t.TokenAddress).
+				Str("chain", t.Chain).
+				Err(err).
+				Msg("Skipping invalid token in batch request")
+			continue
+		}
+
+		key := t.Chain + ":" + t.TokenAddress
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+
+		tokens = append(tokens, cache.TokenIdentifier{
 			Address: t.TokenAddress,
 			Chain:   t.Chain,
-		}
+		})
+	}
+
+	if len(tokens) == 0 {
+		return &pb.GetTokenPricesResponse{Prices: []*pb.TokenPrice{}}, nil
 	}
 
 	cachedPrices, misses, err := h.cache.GetMultiplePrices(ctx, tokens)
@@ -216,6 +250,13 @@ func (h *GRPCHandler) GetTokenPrices(ctx context.Context, req *pb.GetTokenPrices
 }
 
 func (h *GRPCHandler) GetMarketData(ctx context.Context, req *pb.GetMarketDataRequest) (*pb.GetMarketDataResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	if err := validateTokenRequest(req.TokenAddress, req.Chain); err != nil {
+		return nil, err
+	}
+
 	h.logger.Debug().
 		Str("token", req.TokenAddress).
 		Str("chain", req.Chain).
@@ -239,13 +280,43 @@ func (h *GRPCHandler) GetMarketData(ctx context.Context, req *pb.GetMarketDataRe
 		}, nil
 	}
 
+	dbPrice, err := h.repo.GetTokenPrice(ctx, req.TokenAddress, req.Chain)
+	if err != nil {
+		h.logger.Error().Err(err).Msg("Database lookup error")
+	}
+
+	if dbPrice != nil {
+		cachedPrice := &cache.CachedPrice{
+			TokenAddress:   dbPrice.TokenAddress,
+			Chain:          dbPrice.Chain,
+			USDPrice:       dbPrice.USDPrice,
+			MarketCap:      dbPrice.MarketCap,
+			Volume24h:      dbPrice.Volume24h,
+			PriceChange24h: dbPrice.PriceChange24h,
+		}
+		if err := h.cache.SetPrice(ctx, cachedPrice); err != nil {
+			h.logger.Error().Err(err).Msg("Failed to cache market data from database")
+		}
+
+		return &pb.GetMarketDataResponse{
+			TokenAddress:   dbPrice.TokenAddress,
+			Chain:          dbPrice.Chain,
+			UsdPrice:       dbPrice.USDPrice,
+			MarketCap:      dbPrice.MarketCap,
+			Volume_24H:     dbPrice.Volume24h,
+			PriceChange_24H: dbPrice.PriceChange24h,
+			LastUpdated:    dbPrice.LastUpdated.Unix(),
+			FromCache:      false,
+		}, nil
+	}
+
 	price, err := h.coinGecko.GetTokenPrice(ctx, req.TokenAddress, req.Chain)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("Failed to fetch market data from CoinGecko")
 		return nil, fmt.Errorf("failed to fetch market data: %w", err)
 	}
 
-	dbPrice := &repository.TokenPrice{
+	dbPrice = &repository.TokenPrice{
 		TokenAddress:   price.TokenAddress,
 		Chain:          price.Chain,
 		USDPrice:       price.USDPrice,
@@ -283,6 +354,16 @@ func (h *GRPCHandler) GetMarketData(ctx context.Context, req *pb.GetMarketDataRe
 }
 
 func (h *GRPCHandler) RefreshTokenPrice(ctx context.Context, req *pb.RefreshTokenPriceRequest) (*pb.RefreshTokenPriceResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	if err := validateTokenRequest(req.TokenAddress, req.Chain); err != nil {
+		return &pb.RefreshTokenPriceResponse{
+			Success: false,
+			Message: err.Error(),
+		}, nil
+	}
+
 	h.logger.Info().
 		Str("token", req.TokenAddress).
 		Str("chain", req.Chain).
@@ -311,4 +392,31 @@ func (h *GRPCHandler) RefreshTokenPrice(ctx context.Context, req *pb.RefreshToke
 		UsdPrice:    cachedPrice.USDPrice,
 		LastUpdated: cachedPrice.CachedAt.Unix(),
 	}, nil
+}
+
+func validateTokenRequest(tokenAddress, chain string) error {
+	if strings.TrimSpace(tokenAddress) == "" {
+		return status.Error(codes.InvalidArgument, "token address cannot be empty")
+	}
+
+	if strings.TrimSpace(chain) == "" {
+		return status.Error(codes.InvalidArgument, "chain cannot be empty")
+	}
+
+	validChains := map[string]bool{
+		"bsc":      true,
+		"solana":   true,
+		"ethereum": true,
+		"polygon":  true,
+	}
+
+	if !validChains[strings.ToLower(chain)] {
+		return status.Errorf(codes.InvalidArgument, "invalid chain: %s (supported: bsc, solana, ethereum, polygon)", chain)
+	}
+
+	if len(tokenAddress) < 10 {
+		return status.Error(codes.InvalidArgument, "token address appears to be malformed (too short)")
+	}
+
+	return nil
 }
