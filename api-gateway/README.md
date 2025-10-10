@@ -38,9 +38,9 @@ All configuration via environment variables (see `.env.example`):
 | `JWT_SECRET` | JWT signing secret for validation | (required) |
 | `REDIS_URL` | Redis connection URL | `localhost:6379` |
 | `AUTH_SERVICE_URL` | Auth service base URL for login/refresh | (required) |
-| `FRONTEND_URL` | CORS allowed origin (use * only for dev) | `*` |
+| `FRONTEND_URL` | CORS allowed origin (comma-separated list; **NEVER use `*` with credentials**) | (required in production) |
 | `OPENAPI_PATH` | Path to OpenAPI spec for validation | `../docs/openapi.yaml` |
-| `STRICT_OPENAPI_VALIDATION` | Fail startup on validation errors | `false` |
+| `STRICT_OPENAPI_VALIDATION` | Fail startup on validation errors (**recommended `true` in production**) | `false` |
 | `RATE_DEFAULT_RPS` | Default rate limit (requests/second) | `10` |
 | `RATE_DEFAULT_BURST` | Default burst capacity | `20` |
 | `ROUTE_LIMITS` | Per-route rate limit overrides (JSON) | (optional) |
@@ -61,21 +61,72 @@ RATE_DEFAULT_BURST=20    # Burst capacity of 20 requests
 ```
 
 **Per-route overrides** (JSON format):
+
+Shell-escaped example:
 ```bash
 ROUTE_LIMITS='{"\/api\/v1\/portfolios":{"rps":5,"burst":10},"\/api\/v1\/wallets\/:address":{"rps":2,"burst":4}}'
 ```
 
-Rate limit key includes route + user_id (from JWT) or client IP as fallback. Supports Redis (distributed) or in-memory backends.
+Plain JSON (validate with `jq`):
+```json
+{
+  "/api/v1/portfolios": {"rps": 5, "burst": 10},
+  "/api/v1/wallets/:address": {"rps": 2, "burst": 4}
+}
+```
+
+**Validation**:
+```bash
+# Validate JSON before setting
+echo "$ROUTE_LIMITS" | jq . || echo "Invalid JSON"
+```
+
+**Behavior**:
+- Unknown routes fall back to default limits
+- Invalid JSON will cause startup failure with error logged
+- Route limit key includes route + user_id (from JWT) or client IP as fallback
+
+Supports Redis (distributed) or in-memory backends.
 
 ## Health & Observability
 
-**Health Endpoints:**
-- `GET /healthz` - Liveness probe (checks Redis connectivity when REDIS_URL is set)
-- `GET /metrics` - Prometheus metrics (RED metrics + rate-limit counters)
+### Health Endpoints
 
-**Tracing:**
-- OpenTelemetry tracing enabled (stdout by default)
-- Set `OTEL_EXPORTER_OTLP_ENDPOINT` for production OTLP export
+**Liveness Probe**: `GET /healthz`
+- Returns 200 if service process is running
+- When `REDIS_URL` is set, also checks Redis connectivity
+- Use for Kubernetes liveness probes
+- **Never** terminates healthy processes
+
+**Metrics**: `GET /metrics`
+- Prometheus exposition format
+- Includes RED metrics (Rate, Errors, Duration) for all endpoints
+- Rate limiting metrics: `rate_limit_allowed_total`, `rate_limit_blocked_total`
+
+**Response Headers** (on all API responses):
+- `X-RateLimit-Limit` - Maximum requests allowed per window
+- `X-RateLimit-Remaining` - Remaining requests in current window  
+- `X-RateLimit-Reset` - Unix timestamp when limit resets
+- `Retry-After` - Seconds to wait (on 429 responses)
+
+### Tracing
+
+OpenTelemetry distributed tracing:
+- **Development**: Stdout exporter (default)
+- **Production**: Set `OTEL_EXPORTER_OTLP_ENDPOINT` for OTLP export
+  - Supports both HTTP (`http://collector:4318`) and gRPC (`collector:4317`)
+- Automatic span creation for all HTTP requests
+- Trace context propagation to downstream services
+
+**Example Prometheus scrape config**:
+```yaml
+scrape_configs:
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['gateway:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+```
 
 ## API Endpoints
 
@@ -117,21 +168,89 @@ Rate limit key includes route + user_id (from JWT) or client IP as fallback. Sup
 
 ## Security
 
-**CORS Configuration:**
+### CORS Configuration
+
+**⚠️ CRITICAL**: The gateway sets `Access-Control-Allow-Credentials: true`. Using `FRONTEND_URL=*` **violates the CORS specification** and will cause browser errors.
+
+**Single origin** (production):
 ```bash
-FRONTEND_URL=https://app.million-hunter.com  # Production
-FRONTEND_URL=*                               # Development only
+FRONTEND_URL=https://app.million-hunter.com
 ```
 
-**⚠️ Important**: Never use `FRONTEND_URL=*` in production.
+**Multiple origins** (comma-separated):
+```bash
+FRONTEND_URL=https://app.million-hunter.com,https://dashboard.million-hunter.com
+```
 
-**Production Checklist:**
-1. Set cryptographically secure `JWT_SECRET`
-2. Configure specific `FRONTEND_URL` (no wildcards)
-3. Enable HTTPS via load balancer/reverse proxy
-4. Adjust rate limits for production traffic
-5. Configure `OTEL_EXPORTER_OTLP_ENDPOINT` for tracing
-6. Use Redis for multi-instance rate limiting
+**Development only** (insecure):
+```bash
+FRONTEND_URL=http://localhost:3000
+```
+
+**❌ NEVER in production**:
+```bash
+FRONTEND_URL=*  # INVALID with credentials - will fail
+```
+
+### OpenAPI Validation
+
+**Development** (warns on mismatch):
+```bash
+STRICT_OPENAPI_VALIDATION=false  # Default - logs warnings
+make validate-openapi             # Manual validation
+```
+
+**Production** (fails fast on schema drift):
+```bash
+STRICT_OPENAPI_VALIDATION=true   # Recommended - fails startup on errors
+```
+
+**CI/CD Integration**:
+```yaml
+# Example GitHub Actions
+- name: Validate OpenAPI Compliance
+  run: |
+    cd api-gateway
+    make validate-openapi
+```
+
+### Production Deployment Checklist
+
+Before deploying to production:
+
+1. **Secrets & Authentication**
+   - [ ] Set cryptographically secure `JWT_SECRET` (min 32 bytes, random)
+   - [ ] Ensure `JWT_SECRET` matches auth-service configuration
+   - [ ] Rotate secrets regularly (at least quarterly)
+
+2. **CORS & Security Headers**
+   - [ ] Configure specific `FRONTEND_URL` origins (NO wildcards)
+   - [ ] Verify browser can successfully make credentialed requests
+   - [ ] Enable HTTPS via load balancer/reverse proxy
+   - [ ] Set secure headers (HSTS, CSP, X-Frame-Options)
+
+3. **Rate Limiting**
+   - [ ] Adjust `RATE_DEFAULT_RPS` and `RATE_DEFAULT_BURST` for expected traffic
+   - [ ] Configure `ROUTE_LIMITS` for high-traffic endpoints
+   - [ ] Use Redis (`REDIS_URL`) for multi-instance deployments
+   - [ ] Test rate limiting under load (use k6 tests)
+
+4. **Observability**
+   - [ ] Set `OTEL_EXPORTER_OTLP_ENDPOINT` for distributed tracing
+   - [ ] Configure Prometheus scraping of `/metrics`
+   - [ ] Set up alerting on rate limit blocked requests
+   - [ ] Enable structured logging with appropriate levels
+
+5. **Validation & Testing**
+   - [ ] Set `STRICT_OPENAPI_VALIDATION=true` to catch API drift
+   - [ ] Run load tests (k6) against staging environment
+   - [ ] Verify health checks (`/healthz`) work with orchestrator
+   - [ ] Test graceful shutdown behavior
+
+6. **Configuration**
+   - [ ] Verify `REDIS_URL` format (`redis://host:port` or `rediss://` for TLS)
+   - [ ] Set `AUTH_SERVICE_URL` with proper timeout and retry configuration
+   - [ ] Document all environment variables in deployment docs
 
 ---
 
