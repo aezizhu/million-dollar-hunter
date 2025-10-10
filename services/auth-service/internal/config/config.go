@@ -35,8 +35,16 @@ func Parse() (Config, error) {
 	cfg.JWTSigningKey = []byte(getenv("JWT_SIGNING_KEY", "dev-insecure-change-me"))
 	accessTTL := getenv("JWT_ACCESS_TTL_MINUTES", "15")
 	refreshTTL := getenv("JWT_REFRESH_TTL_HOURS", "168")
-	attlMin, _ := strconv.Atoi(accessTTL)
-	rttlH, _ := strconv.Atoi(refreshTTL)
+
+	attlMin, err := strconv.Atoi(accessTTL)
+	if err != nil || attlMin <= 0 {
+		attlMin = 15
+	}
+	rttlH, err := strconv.Atoi(refreshTTL)
+	if err != nil || rttlH <= 0 {
+		rttlH = 168
+	}
+
 	cfg.AccessTTL = time.Duration(attlMin) * time.Minute
 	cfg.RefreshTTL = time.Duration(rttlH) * time.Hour
 	cfg.EnableMultiUser = getenv("ENABLE_MULTI_USER", "false") == "true"

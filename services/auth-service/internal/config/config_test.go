@@ -58,3 +58,17 @@ func TestParseEnvOverrides(t *testing.T) {
 		t.Fatalf("expected multi-user enabled")
 	}
 }
+func TestParseInvalidTTLsFallback(t *testing.T) {
+	os.Setenv("JWT_ACCESS_TTL_MINUTES", "not-a-number")
+	os.Setenv("JWT_REFRESH_TTL_HOURS", "-5")
+	cfg, err := Parse()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if int(cfg.AccessTTL.Minutes()) != 15 {
+		t.Fatalf("expected fallback access ttl 15m, got %v", cfg.AccessTTL)
+	}
+	if int(cfg.RefreshTTL.Hours()) != 168 {
+		t.Fatalf("expected fallback refresh ttl 168h, got %v", cfg.RefreshTTL)
+	}
+}
