@@ -2,8 +2,10 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
@@ -30,15 +32,22 @@ func NewConsumer(cfg config.Config, svc *service.PortfolioService) (*Consumer, e
 }
 
 func (c *Consumer) Run() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	handler := &groupHandler{svc: c.svc, topic: c.cfg.TopicTxIngested}
 	for {
 		select {
 		case <-c.stopCh:
+			cancel()
 			return
 		default:
 			if err := c.grp.Consume(ctx, []string{c.cfg.TopicTxIngested}, handler); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
 				log.Printf("consume error: %v", err)
+				time.Sleep(time.Second)
 			}
 		}
 	}
@@ -58,10 +67,31 @@ func (h *groupHandler) Setup(sarama.ConsumerGroupSession) error   { return nil }
 func (h *groupHandler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 func (h *groupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		if err := h.svc.HandleTransactionDataIngested(sess.Context(), msg.Value); err != nil {
-			log.Printf("handle message err: %v", err)
+		err := h.svc.HandleTransactionDataIngested(sess.Context(), msg.Value)
+		if err != nil {
+			log.Printf("handle message err: %v, topic=%s partition=%d offset=%d",
+				err, msg.Topic, msg.Partition, msg.Offset)
+
+			if isPermanentError(err) {
+				log.Printf("permanent error, skipping message: topic=%s partition=%d offset=%d",
+					msg.Topic, msg.Partition, msg.Offset)
+				sess.MarkMessage(msg, "")
+			} else {
+				return err
+			}
+		} else {
+			sess.MarkMessage(msg, "")
 		}
-		sess.MarkMessage(msg, "")
 	}
 	return nil
+}
+
+func isPermanentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "unmarshal") ||
+		strings.Contains(errMsg, "invalid") ||
+		strings.Contains(errMsg, "malformed")
 }

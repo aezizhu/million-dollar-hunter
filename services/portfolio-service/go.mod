@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/IBM/sarama v1.43.3
 	github.com/caarlos0/env/v11 v11.1.0
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.6.0
 	google.golang.org/grpc v1.66.0
 	google.golang.org/protobuf v1.34.2
