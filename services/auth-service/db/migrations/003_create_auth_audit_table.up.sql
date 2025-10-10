@@ -9,3 +9,4 @@ CREATE TABLE IF NOT EXISTS auth_audit (
 );
 CREATE INDEX IF NOT EXISTS idx_auth_audit_user ON auth_audit(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_audit_event ON auth_audit(event);
+CREATE INDEX IF NOT EXISTS idx_auth_audit_user_created ON auth_audit(user_id, created_at DESC);
