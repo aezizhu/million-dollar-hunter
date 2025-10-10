@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/hlog"
 	"google.golang.org/grpc"
@@ -22,19 +22,25 @@ import (
 func main() {
 	log := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
-	cfg, _ := config.Parse()
+	cfg, err := config.Parse()
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to parse config")
+	}
 	j := jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
 
 	mux := http.NewServeMux()
 	s := &httpapi.Server{Logger: &log, JWT: j}
 	if os.Getenv("ENABLE_MULTI_USER") == "true" {
 		if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-			if conn, err := pgx.Connect(context.Background(), dsn); err == nil {
-				pg := &store.PGStore{Conn: conn}
-				s.Store = pg
-				s.RefreshTokens = pg
-				s.Audit = pg
+			pool, err := pgxpool.New(context.Background(), dsn)
+			if err != nil {
+				log.Fatal().Err(err).Msg("database connection failed")
 			}
+			pg := &store.PGStore{Pool: pool}
+			s.Store = pg
+			s.RefreshTokens = pg
+			s.Audit = pg
+			defer pool.Close()
 		}
 	}
 	mux.HandleFunc("/healthz", s.Health)
@@ -49,13 +55,20 @@ func main() {
 	}
 
 	grpcSrv := grpc.NewServer()
-	grpcLn, _ := net.Listen("tcp", ":"+cfg.GRPCPort)
+	grpcLn, err := net.Listen("tcp", ":"+cfg.GRPCPort)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to start gRPC listener")
+	}
 
 	go func() {
-		_ = httpSrv.ListenAndServe()
+		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal().Err(err).Msg("HTTP server failed")
+		}
 	}()
 	go func() {
-		_ = grpcSrv.Serve(grpcLn)
+		if err := grpcSrv.Serve(grpcLn); err != nil {
+			log.Fatal().Err(err).Msg("gRPC server failed")
+		}
 	}()
 
 	stop := make(chan os.Signal, 1)
