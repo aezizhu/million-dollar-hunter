@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package marketdata;
+
+option go_package = "github.com/aezizhu/million-dollar-hunter/services/market-data-service/pkg/pb";
+
+// MarketDataService provides real-time and cached cryptocurrency market data
+service MarketDataService {
+  // GetTokenPrice retrieves the current USD price for a specific token
+  rpc GetTokenPrice(GetTokenPriceRequest) returns (GetTokenPriceResponse);
+  
+  // GetTokenPrices retrieves prices for multiple tokens in a single request
+  rpc GetTokenPrices(GetTokenPricesRequest) returns (GetTokenPricesResponse);
+  
+  // GetMarketData retrieves comprehensive market data for a token
+  rpc GetMarketData(GetMarketDataRequest) returns (GetMarketDataResponse);
+  
+  // RefreshTokenPrice forces a refresh of a token's price from CoinGecko
+  rpc RefreshTokenPrice(RefreshTokenPriceRequest) returns (RefreshTokenPriceResponse);
+}
+
+message GetTokenPriceRequest {
+  string token_address = 1;
+  string chain = 2; // e.g., "bsc", "solana"
+}
+
+message GetTokenPriceResponse {
+  string token_address = 1;
+  string chain = 2;
+  double usd_price = 3;
+  int64 last_updated = 4; // Unix timestamp
+  bool from_cache = 5;
+}
+
+message GetTokenPricesRequest {
+  repeated TokenIdentifier tokens = 1;
+}
+
+message TokenIdentifier {
+  string token_address = 1;
+  string chain = 2;
+}
+
+message GetTokenPricesResponse {
+  repeated TokenPrice prices = 1;
+}
+
+message TokenPrice {
+  string token_address = 1;
+  string chain = 2;
+  double usd_price = 3;
+  int64 last_updated = 4;
+  bool from_cache = 5;
+}
+
+message GetMarketDataRequest {
+  string token_address = 1;
+  string chain = 2;
+}
+
+message GetMarketDataResponse {
+  string token_address = 1;
+  string chain = 2;
+  double usd_price = 3;
+  double market_cap = 4;
+  double volume_24h = 5;
+  double price_change_24h = 6;
+  int64 last_updated = 7;
+  bool from_cache = 8;
+}
+
+message RefreshTokenPriceRequest {
+  string token_address = 1;
+  string chain = 2;
+}
+
+message RefreshTokenPriceResponse {
+  bool success = 1;
+  string message = 2;
+  double usd_price = 3;
+  int64 last_updated = 4;
+}
