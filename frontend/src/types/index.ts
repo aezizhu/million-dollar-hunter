@@ -25,6 +25,7 @@ export interface RegisterResponse {
 
 export interface TokenRefreshResponse {
   accessToken: string;
+  refreshToken?: string;
 }
 
 export interface PortfolioSummary {

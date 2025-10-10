@@ -25,9 +25,11 @@ const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('accessToken');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
@@ -41,19 +43,32 @@ apiClient.interceptors.response.use(
       originalRequest.headers['X-Retry'] = 'true';
       
       try {
-        const { data } = await axios.post<TokenRefreshResponse>(
-          `${API_BASE_URL}/api/v1/auth/refresh`,
-          {},
-          { withCredentials: true }
-        );
-        
-        localStorage.setItem('accessToken', data.accessToken);
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
-        
-        return apiClient(originalRequest);
+        if (typeof window !== 'undefined') {
+          const refreshToken = localStorage.getItem('refreshToken');
+          const { data } = await axios.post<TokenRefreshResponse>(
+            `${API_BASE_URL}/api/v1/auth/refresh`,
+            {},
+            { 
+              headers: { 
+                Authorization: refreshToken ? `Bearer ${refreshToken}` : undefined 
+              } 
+            }
+          );
+          
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) {
+            localStorage.setItem('refreshToken', data.refreshToken);
+          }
+          originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+          
+          return apiClient(originalRequest);
+        }
       } catch (refreshError) {
-        localStorage.removeItem('accessToken');
-        window.location.href = '/auth/login';
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          window.location.href = '/auth/login';
+        }
         return Promise.reject(refreshError);
       }
     }

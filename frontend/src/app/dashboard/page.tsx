@@ -42,6 +42,7 @@ export default function DashboardPage() {
   const [address, setAddress] = useState('');
   const [chain, setChain] = useState<Chain>('ethereum');
   const [nickname, setNickname] = useState('');
+  const [mutationError, setMutationError] = useState('');
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -63,13 +64,33 @@ export default function DashboardPage() {
       setAddress('');
       setNickname('');
       setChain('ethereum');
+      setMutationError('');
+    },
+    onError: () => {
+      setMutationError('Failed to add wallet. Please try again.');
     },
   });
 
-  const handleAddWallet = () => {
-    if (address) {
-      addWalletMutation.mutate({ address, chain, nickname: nickname || undefined });
+  const validateAddress = (addr: string, chain: Chain): boolean => {
+    if (chain === 'solana') {
+      return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr);
     }
+    return /^0x[a-fA-F0-9]{40}$/.test(addr);
+  };
+
+  const handleAddWallet = () => {
+    if (!address) {
+      setMutationError('Please enter a wallet address');
+      return;
+    }
+    
+    if (!validateAddress(address, chain)) {
+      setMutationError(`Invalid ${chain} address format`);
+      return;
+    }
+    
+    setMutationError('');
+    addWalletMutation.mutate({ address, chain, nickname: nickname || undefined });
   };
 
   if (authLoading) {
@@ -149,6 +170,11 @@ export default function DashboardPage() {
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add Wallet to Track</DialogTitle>
         <DialogContent>
+          {mutationError && (
+            <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
+              {mutationError}
+            </Alert>
+          )}
           <TextField
             label="Wallet Address"
             fullWidth

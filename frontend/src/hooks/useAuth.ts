@@ -9,15 +9,22 @@ export function useAuth() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    setIsAuthenticated(!!token);
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('accessToken');
+      setIsAuthenticated(!!token);
+    }
     setIsLoading(false);
   }, []);
 
   const login = async (credentials: LoginRequest) => {
     try {
       const response = await authApi.login(credentials);
-      localStorage.setItem('accessToken', response.accessToken);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('accessToken', response.accessToken);
+        if (response.refreshToken) {
+          localStorage.setItem('refreshToken', response.refreshToken);
+        }
+      }
       setIsAuthenticated(true);
       return { success: true };
     } catch (error) {
@@ -43,9 +50,12 @@ export function useAuth() {
   };
 
   const logout = () => {
-    localStorage.removeItem('accessToken');
-    setIsAuthenticated(false);
-    window.location.href = '/auth/login';
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      setIsAuthenticated(false);
+      window.location.href = '/auth/login';
+    }
   };
 
   return {
