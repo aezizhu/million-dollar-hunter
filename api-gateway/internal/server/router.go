@@ -12,6 +12,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 
+	"google.golang.org/grpc"
+
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/clients"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/handlers"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/middleware"
@@ -68,6 +71,16 @@ func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Durat
 }
 
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) {
+	grpcClients, err := clients.NewGRPCClients(cfg.PortfolioServiceURL, cfg.MarketDataServiceURL)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to initialize gRPC clients, services will be unavailable")
+	} else {
+		logger.Info().
+			Str("portfolio_service", cfg.PortfolioServiceURL).
+			Str("market_data_service", cfg.MarketDataServiceURL).
+			Msg("gRPC clients initialized successfully")
+	}
+
 	httpMetrics := observability.NewHTTPMetrics(reg, cfg.PrometheusNamespace)
 	r.Use(func(c *gin.Context) {
 		c.Set("http_metrics", httpMetrics)
@@ -123,10 +136,16 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 	api.Use(middleware.Auth(cfg))
 	api.Use(middleware.Tracing())
 
-	api.GET("/portfolios", handlers.ListPortfolios())
-	api.POST("/portfolios", handlers.AddWallet())
-	api.GET("/wallets/:address", handlers.GetWallet())
-	api.GET("/wallets/:address/transactions", handlers.GetTransactions())
-	api.GET("/tokens/:tokenAddress/holders", handlers.TopHolders())
-	api.GET("/export/wallet/:address", handlers.ExportWallet())
+	var portfolioConn, marketDataConn *grpc.ClientConn
+	if grpcClients != nil {
+		portfolioConn = grpcClients.PortfolioConn
+		marketDataConn = grpcClients.MarketDataConn
+	}
+
+	api.GET("/portfolios", handlers.ListPortfolios(portfolioConn))
+	api.POST("/portfolios", handlers.AddWallet(portfolioConn))
+	api.GET("/wallets/:address", handlers.GetWallet(portfolioConn))
+	api.GET("/wallets/:address/transactions", handlers.GetTransactions(portfolioConn))
+	api.GET("/tokens/:tokenAddress/holders", handlers.TopHolders(marketDataConn))
+	api.GET("/export/wallet/:address", handlers.ExportWallet(portfolioConn))
 }
