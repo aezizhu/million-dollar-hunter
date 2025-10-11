@@ -5,6 +5,8 @@ go 1.24.0
 toolchain go1.24.8
 
 require (
+	github.com/aezizhu/million-dollar-hunter/services/auth-service v0.0.0-00010101000000-000000000000
+	github.com/aezizhu/million-dollar-hunter/services/portfolio-service v0.0.0-00010101000000-000000000000
 	github.com/getkin/kin-openapi v0.124.0
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.10.1
@@ -21,7 +23,6 @@ require (
 )
 
 require (
-	github.com/aezizhu/million-dollar-hunter/services/portfolio-service v0.0.0-00010101000000-000000000000 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/sonic v1.13.3 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
@@ -76,6 +77,7 @@ require (
 )
 
 replace (
+	github.com/aezizhu/million-dollar-hunter/services/auth-service => ../services/auth-service
 	github.com/aezizhu/million-dollar-hunter/services/market-data-service => ../services/market-data-service
 	github.com/aezizhu/million-dollar-hunter/services/portfolio-service => ../services/portfolio-service
 )

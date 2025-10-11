@@ -1,3 +1,13 @@
+JWT Validation Modes
+
+- AUTH_VALIDATE_MODE=local (default): JWT validated in gateway using JWT_SECRET
+- AUTH_VALIDATE_MODE=grpc: Gateway delegates validation to auth-service via gRPC
+  - Required: AUTH_GRPC_ADDR (e.g., localhost:9090), JWT_AUDIENCE
+  - Behavior: Requests with invalid/expired tokens receive 401; failures to reach auth-service also return 401
+- AUTH_GRPC_TIMEOUT_MS: Timeout in ms for gRPC auth validation (default 2000)
+- AUTH_GRPC_FALLBACK_TO_LOCAL: When true, if gRPC validation errors, gateway falls back to local validation (JWT_SECRET or MVP gate) instead of returning 401
+
+
 # API Gateway Service
 
 The API Gateway is the single public-facing entry point for the Million Hunter crypto dashboard platform. It handles authentication, rate limiting, request routing, and observability for all client requests.
