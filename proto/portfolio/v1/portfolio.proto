@@ -37,8 +37,9 @@ enum ExportFormat {
 }
 
 message ExportRequest {
-  string wallet_id = 1;
-  ExportFormat format = 2;
+  string user_id = 1;
+  string wallet_id = 2;
+  ExportFormat format = 3;
 }
 
 message ExportResponse {
@@ -63,8 +64,9 @@ message GetPortfolioSummaryResponse {
 }
 
 message GetWalletDetailsRequest {
-  string wallet_id = 1;
-  string address = 2;
+  string user_id = 1;
+  string wallet_id = 2;
+  string address = 3;
 }
 
 message GetWalletDetailsResponse {

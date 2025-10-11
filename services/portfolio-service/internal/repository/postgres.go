@@ -54,6 +54,29 @@ func (r *Repo) Close(ctx context.Context) {
 	r.db.Close()
 }
 
+func (r *Repo) VerifyWalletOwnership(ctx context.Context, userID, walletID string) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	var exists bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM wallets 
+			WHERE (id = $1 OR address = $1) AND user_id = $2
+		)
+	`, walletID, userID).Scan(&exists)
+	
+	if err != nil {
+		return fmt.Errorf("check wallet ownership: %w", err)
+	}
+	
+	if !exists {
+		return errors.New("wallet not found or access denied")
+	}
+	
+	return nil
+}
+
 type Portfolio struct {
 	WalletID      string
 	Assets        []Asset
@@ -222,16 +245,29 @@ func (r *Repo) GetPortfolioSummary(ctx context.Context, userID string) ([]Wallet
 			w.id,
 			w.address,
 			w.chain,
-			COUNT(DISTINCT a.id) as asset_count,
-			COALESCE(SUM(DISTINCT s.usd_value), 0) as total_usd_value
+			COUNT(DISTINCT subq.token_address) as asset_count,
+			COALESCE(SUM(subq.usd_value), 0) as total_usd_value
 		FROM wallets w
-		LEFT JOIN assets a ON w.id = a.wallet_id
-		LEFT JOIN LATERAL (
-			SELECT usd_value FROM asset_snapshots 
-			WHERE asset_id = a.id 
-			ORDER BY ts DESC 
-			LIMIT 1
-		) s ON true
+		LEFT JOIN (
+			SELECT DISTINCT ON (t.wallet_id, t.token_address)
+				t.wallet_id,
+				t.token_address,
+				COALESCE(s.usd_value, 0) as usd_value
+			FROM transactions_view t
+			LEFT JOIN LATERAL (
+				SELECT usd_value FROM asset_snapshots 
+				WHERE wallet_id = t.wallet_id AND token_address = t.token_address
+				ORDER BY ts DESC 
+				LIMIT 1
+			) s ON true
+			WHERE t.token_address IS NOT NULL AND t.token_address != ''
+			GROUP BY t.wallet_id, t.token_address, s.usd_value
+			HAVING SUM(CASE 
+				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+				ELSE 0
+			END) > 0
+		) subq ON w.id = subq.wallet_id
 		WHERE w.user_id = $1
 		GROUP BY w.id, w.address, w.chain
 		ORDER BY total_usd_value DESC
@@ -366,7 +402,6 @@ func (r *Repo) GetTransactionHistory(ctx context.Context, walletID, address stri
 	offset := (page - 1) * limit
 
 	var walletUUID string
-	whereClause := `WHERE w.id = $1 OR w.address = $1`
 	if walletID != "" {
 		walletUUID = walletID
 	} else if address != "" {
@@ -375,41 +410,57 @@ func (r *Repo) GetTransactionHistory(ctx context.Context, walletID, address stri
 		return nil, errors.New("wallet_id or address required")
 	}
 
-	var typeFilter string
-	var args []interface{}
-	args = append(args, walletUUID)
-	argPos := 2
-
 	if filterByType != "" {
 		validTypes := map[string]bool{"send": true, "receive": true, "swap": true, "approve": true, "mint": true, "burn": true}
 		if !validTypes[filterByType] {
 			return nil, fmt.Errorf("invalid filter_by_type: must be one of send, receive, swap, approve, mint, burn")
 		}
-		typeFilter = fmt.Sprintf(" AND t.type = $%d", argPos)
-		args = append(args, filterByType)
-		argPos++
+	}
+
+	var args []interface{}
+	var countQuery string
+	var query string
+
+	if filterByType != "" {
+		args = []interface{}{walletUUID, filterByType}
+		countQuery = `
+			SELECT COUNT(*)
+			FROM transactions_view t
+			JOIN wallets w ON t.wallet_id = w.id
+			WHERE (w.id = $1 OR w.address = $1) AND t.type = $2`
+
+		args = append(args, limit, offset)
+		query = `
+			SELECT t.tx_hash, t.from_addr, t.to_addr, t.amount, t.asset_symbol, COALESCE(t.token_address, ''), t.ts, t.type
+			FROM transactions_view t
+			JOIN wallets w ON t.wallet_id = w.id
+			WHERE (w.id = $1 OR w.address = $1) AND t.type = $2
+			ORDER BY t.ts DESC
+			LIMIT $3 OFFSET $4`
+	} else {
+		args = []interface{}{walletUUID}
+		countQuery = `
+			SELECT COUNT(*)
+			FROM transactions_view t
+			JOIN wallets w ON t.wallet_id = w.id
+			WHERE w.id = $1 OR w.address = $1`
+
+		args = append(args, limit, offset)
+		query = `
+			SELECT t.tx_hash, t.from_addr, t.to_addr, t.amount, t.asset_symbol, COALESCE(t.token_address, ''), t.ts, t.type
+			FROM transactions_view t
+			JOIN wallets w ON t.wallet_id = w.id
+			WHERE w.id = $1 OR w.address = $1
+			ORDER BY t.ts DESC
+			LIMIT $2 OFFSET $3`
 	}
 
 	var totalCount int32
-	countQuery := `
-		SELECT COUNT(*)
-		FROM transactions_view t
-		JOIN wallets w ON t.wallet_id = w.id
-		` + whereClause + typeFilter
-	err := r.db.QueryRow(ctx, countQuery, args...).Scan(&totalCount)
+	countArgs := args[:len(args)-2]
+	err := r.db.QueryRow(ctx, countQuery, countArgs...).Scan(&totalCount)
 	if err != nil {
 		return nil, fmt.Errorf("count transactions: %w", err)
 	}
-
-	args = append(args, limit, offset)
-	query := `
-		SELECT t.tx_hash, t.from_addr, t.to_addr, t.amount, t.asset_symbol, COALESCE(a.token_address, ''), t.ts, t.type
-		FROM transactions_view t
-		JOIN wallets w ON t.wallet_id = w.id
-		LEFT JOIN assets a ON a.wallet_id = t.wallet_id AND a.symbol = t.asset_symbol
-		` + whereClause + typeFilter + `
-		ORDER BY t.ts DESC
-		LIMIT $` + fmt.Sprintf("%d", argPos) + ` OFFSET $` + fmt.Sprintf("%d", argPos+1)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
