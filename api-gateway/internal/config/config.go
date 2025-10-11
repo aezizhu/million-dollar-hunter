@@ -16,6 +16,7 @@ type Config struct {
 	MarketDataServiceURL    string
 	AuthValidateMode        string
 	AuthGRPCAddr            string
+	AuthGRPCTimeoutMs       int
 	JWTSecret               string
 	JWTAudience             string
 	FrontendURL             string
@@ -68,6 +69,7 @@ func Load() Config {
 		MarketDataServiceURL:    os.Getenv("MARKET_DATA_SERVICE_URL"),
 		AuthValidateMode:        getenv("AUTH_VALIDATE_MODE", "local"),
 		AuthGRPCAddr:            os.Getenv("AUTH_GRPC_ADDR"),
+		AuthGRPCTimeoutMs:       getenvInt("AUTH_GRPC_TIMEOUT_MS", 2000),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		JWTAudience:             os.Getenv("JWT_AUDIENCE"),
 		FrontendURL:             getenv("FRONTEND_URL", "*"),

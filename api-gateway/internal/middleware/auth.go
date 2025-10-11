@@ -25,7 +25,11 @@ func Auth(cfg config.Config, authConn *grpc.ClientConn) gin.HandlerFunc {
 
 	if cfg.AuthValidateMode == "grpc" && authConn != nil {
 			cli := gen.NewAuthServiceClient(authConn)
-			ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+			timeout := time.Duration(cfg.AuthGRPCTimeoutMs) * time.Millisecond
+			if timeout <= 0 {
+				timeout = 2 * time.Second
+			}
+			ctx, cancel := context.WithTimeout(c.Request.Context(), timeout)
 			defer cancel()
 			resp, err := cli.ValidateToken(ctx, &gen.ValidateRequest{
 				Token:       tokenStr,

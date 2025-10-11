@@ -148,6 +148,5 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 	api.GET("/wallets/:address/transactions", handlers.GetTransactions(portfolioConn, logger))
 	api.GET("/tokens/:tokenAddress/holders", handlers.TopHolders(marketDataConn, logger))
 	api.GET("/export/wallet/:address", handlers.ExportWallet(portfolioConn, logger))
-	
 	return grpcClients
 }
