@@ -27,6 +27,7 @@ type Repository interface {
 	GetWalletDetails(ctx context.Context, walletID, address string) (*repository.WalletDetails, error)
 	GetTransactionHistory(ctx context.Context, walletID, address string, page, limit int32, filterByType string) (*repository.TransactionResult, error)
 	GetPortfolioByWalletID(ctx context.Context, walletID string) (*repository.Portfolio, error)
+	UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string) (bool, error)
 	UpsertFromIngest(ctx context.Context, payload []byte) error
 	Close(ctx context.Context)
 }
@@ -83,6 +84,14 @@ func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*
 
 	if !isValidWalletID(req.GetWalletId()) {
 		return nil, status.Error(codes.InvalidArgument, "invalid wallet_id format")
+	}
+
+	owned, err := s.repo.UserOwnsWallet(ctx, req.GetUserId(), req.GetWalletId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ownership check failed: %v", err)
+	}
+	if !owned {
+		return nil, status.Error(codes.PermissionDenied, "not authorized to export this wallet")
 	}
 
 	portfolio, err := s.repo.GetPortfolioByWalletID(ctx, req.GetWalletId())

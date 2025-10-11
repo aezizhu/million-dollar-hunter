@@ -48,6 +48,30 @@ func NewPostgres(url string, poolCfg PoolConfig) (*Repo, error) {
 		return nil, err
 	}
 	return &Repo{db: pool}, nil
+type OwnershipCheckResult struct {
+	Owned bool
+}
+
+func (r *Repo) UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string) (bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	var owned bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM wallets
+			WHERE user_id = $1
+			  AND (id = $2 OR address = $2)
+			LIMIT 1
+		)
+	`, userID, walletIDOrAddr).Scan(&owned)
+	if err != nil {
+		return false, fmt.Errorf("check ownership: %w", err)
+	}
+	return owned, nil
+}
+
 }
 
 func (r *Repo) Close(ctx context.Context) {
