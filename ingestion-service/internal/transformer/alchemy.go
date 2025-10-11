@@ -52,27 +52,42 @@ func TransformAlchemyTransfers(data interface{}) ([]kafka.Transaction, error) {
 		}
 
 		hash, _ := transfer["hash"].(string)
+		if hash == "" {
+			continue
+		}
+		
 		from, _ := transfer["from"].(string)
 		to, _ := transfer["to"].(string)
 		category, _ := transfer["category"].(string)
 
 		var amount string
 		var symbol string
+		var tokenAddress string
 
 		if rawContract, ok := transfer["rawContract"].(map[string]interface{}); ok {
 			if val, ok := rawContract["value"].(string); ok {
 				amount = val
+			}
+			if addr, ok := rawContract["address"].(string); ok {
+				tokenAddress = addr
 			}
 		}
 
 		if asset, ok := transfer["asset"].(string); ok {
 			symbol = asset
 		}
+		
+		if tokenAddress == "" && category == "external" {
+			tokenAddress = "0x0000000000000000000000000000000000000000"
+		}
 
 		var timestamp time.Time
 		if metadata, ok := transfer["metadata"].(map[string]interface{}); ok {
 			if blockTimestamp, ok := metadata["blockTimestamp"].(string); ok {
-				timestamp, _ = time.Parse(time.RFC3339, blockTimestamp)
+				parsed, err := time.Parse(time.RFC3339, blockTimestamp)
+				if err == nil {
+					timestamp = parsed
+				}
 			}
 		}
 
@@ -86,13 +101,14 @@ func TransformAlchemyTransfers(data interface{}) ([]kafka.Transaction, error) {
 		}
 
 		transactions = append(transactions, kafka.Transaction{
-			Hash:      hash,
-			From:      from,
-			To:        to,
-			Amount:    amount,
-			Symbol:    symbol,
-			Timestamp: timestamp,
-			Type:      txType,
+			Hash:         hash,
+			From:         from,
+			To:           to,
+			Amount:       amount,
+			Symbol:       symbol,
+			TokenAddress: tokenAddress,
+			Timestamp:    timestamp,
+			Type:         txType,
 		})
 	}
 

@@ -18,13 +18,14 @@ type Producer struct {
 }
 
 type Transaction struct {
-	Hash      string    `json:"hash"`
-	From      string    `json:"from"`
-	To        string    `json:"to"`
-	Amount    string    `json:"amount"`
-	Symbol    string    `json:"symbol"`
-	Timestamp time.Time `json:"timestamp"`
-	Type      string    `json:"type"`
+	Hash         string    `json:"hash"`
+	From         string    `json:"from"`
+	To           string    `json:"to"`
+	Amount       string    `json:"amount"`
+	Symbol       string    `json:"symbol"`
+	TokenAddress string    `json:"token_address"`
+	Timestamp    time.Time `json:"timestamp"`
+	Type         string    `json:"type"`
 }
 
 type TransactionDataIngestedEvent struct {

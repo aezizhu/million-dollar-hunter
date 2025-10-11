@@ -24,6 +24,10 @@ func TransformSolanaTransactions(data interface{}) ([]kafka.Transaction, error) 
 		if hash == "" {
 			hash, _ = tx["hash"].(string)
 		}
+		
+		if hash == "" {
+			continue
+		}
 
 		var timestamp time.Time
 		if blockTime, ok := tx["blockTime"].(float64); ok {
@@ -33,7 +37,7 @@ func TransformSolanaTransactions(data interface{}) ([]kafka.Transaction, error) 
 			timestamp = time.Now().UTC()
 		}
 
-		var from, to, amount, symbol string
+		var from, to, amount, symbol, tokenAddress string
 		
 		if meta, ok := tx["meta"].(map[string]interface{}); ok {
 			if preBalances, ok := meta["preBalances"].([]interface{}); ok && len(preBalances) > 0 {
@@ -61,15 +65,17 @@ func TransformSolanaTransactions(data interface{}) ([]kafka.Transaction, error) 
 		}
 
 		symbol = "SOL"
+		tokenAddress = "So11111111111111111111111111111111111111112"
 
 		transactions = append(transactions, kafka.Transaction{
-			Hash:      hash,
-			From:      from,
-			To:        to,
-			Amount:    amount,
-			Symbol:    symbol,
-			Timestamp: timestamp,
-			Type:      "transfer",
+			Hash:         hash,
+			From:         from,
+			To:           to,
+			Amount:       amount,
+			Symbol:       symbol,
+			TokenAddress: tokenAddress,
+			Timestamp:    timestamp,
+			Type:         "transfer",
 		})
 	}
 

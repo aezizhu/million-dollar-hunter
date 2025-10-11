@@ -34,11 +34,31 @@ func TestTransformAlchemyTransfers(t *testing.T) {
 						"category": "erc20",
 						"asset":    "USDC",
 						"rawContract": map[string]interface{}{
-							"value": "1000000",
+							"value":   "1000000",
+							"address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
 						},
 						"metadata": map[string]interface{}{
 							"blockTimestamp": "2024-01-01T00:00:00Z",
 						},
+					},
+				},
+			},
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name: "skip transfer with empty hash",
+			data: map[string]interface{}{
+				"transfers": []interface{}{
+					map[string]interface{}{
+						"hash": "",
+						"from": "0xabc",
+						"to":   "0xdef",
+					},
+					map[string]interface{}{
+						"hash": "0x456",
+						"from": "0xghi",
+						"to":   "0xjkl",
 					},
 				},
 			},
@@ -90,7 +110,8 @@ func TestTransformAlchemyTransfers_Fields(t *testing.T) {
 				"category": "erc20",
 				"asset":    "USDT",
 				"rawContract": map[string]interface{}{
-					"value": "5000000",
+					"value":   "5000000",
+					"address": "0xdAC17F958D2ee523a2206206994597C13D831ec7",
 				},
 				"metadata": map[string]interface{}{
 					"blockTimestamp": "2024-03-15T10:30:00Z",
@@ -123,6 +144,9 @@ func TestTransformAlchemyTransfers_Fields(t *testing.T) {
 	}
 	if tx.Symbol != "USDT" {
 		t.Errorf("Symbol = %v, want %v", tx.Symbol, "USDT")
+	}
+	if tx.TokenAddress != "0xdAC17F958D2ee523a2206206994597C13D831ec7" {
+		t.Errorf("TokenAddress = %v, want %v", tx.TokenAddress, "0xdAC17F958D2ee523a2206206994597C13D831ec7")
 	}
 	if tx.Type != "erc20" {
 		t.Errorf("Type = %v, want %v", tx.Type, "erc20")
