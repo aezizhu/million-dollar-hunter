@@ -222,16 +222,29 @@ func (r *Repo) GetPortfolioSummary(ctx context.Context, userID string) ([]Wallet
 			w.id,
 			w.address,
 			w.chain,
-			COUNT(DISTINCT a.id) as asset_count,
-			COALESCE(SUM(DISTINCT s.usd_value), 0) as total_usd_value
+			COUNT(DISTINCT subq.token_address) as asset_count,
+			COALESCE(SUM(subq.usd_value), 0) as total_usd_value
 		FROM wallets w
-		LEFT JOIN assets a ON w.id = a.wallet_id
-		LEFT JOIN LATERAL (
-			SELECT usd_value FROM asset_snapshots 
-			WHERE asset_id = a.id 
-			ORDER BY ts DESC 
-			LIMIT 1
-		) s ON true
+		LEFT JOIN (
+			SELECT DISTINCT ON (t.wallet_id, t.token_address)
+				t.wallet_id,
+				t.token_address,
+				COALESCE(s.usd_value, 0) as usd_value
+			FROM transactions_view t
+			LEFT JOIN LATERAL (
+				SELECT usd_value FROM asset_snapshots 
+				WHERE wallet_id = t.wallet_id AND token_address = t.token_address
+				ORDER BY ts DESC 
+				LIMIT 1
+			) s ON true
+			WHERE t.token_address IS NOT NULL AND t.token_address != ''
+			GROUP BY t.wallet_id, t.token_address, s.usd_value
+			HAVING SUM(CASE 
+				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+				ELSE 0
+			END) > 0
+		) subq ON w.id = subq.wallet_id
 		WHERE w.user_id = $1
 		GROUP BY w.id, w.address, w.chain
 		ORDER BY total_usd_value DESC
