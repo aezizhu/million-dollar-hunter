@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/auth"
-	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
@@ -32,13 +31,6 @@ func (s storeWithPW) Create(ctx context.Context, email, passwordHash string) (st
 func (s storeWithPW) GetByEmail(ctx context.Context, email string) (store.User, error) {
 	return store.User{ID: "u-1", Email: email, PasswordHash: s.hash}, nil
 }
-
-type noJWT struct{}
-
-func (noJWT) GeneratePair(userID, email string) (string, string, time.Time, error) {
-	return "a", "r", time.Now().Add(1 * time.Minute), nil
-}
-func (noJWT) ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, error) { return &jwtmgr.Claims{}, nil }
 
 func TestLoginLockoutThreshold(t *testing.T) {
 	_ = os.Setenv("ENABLE_MULTI_USER", "true")
