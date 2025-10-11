@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -132,10 +133,10 @@ func TestValidateToken_CancelledContext(t *testing.T) {
 		Token:       access,
 		ExpectedAud: "aud",
 	})
-	if err != nil {
-		t.Fatalf("unexpected grpc error: %v", err)
+	if err == nil {
+		t.Fatalf("expected gRPC error on cancelled context, got resp=%+v", resp)
 	}
-	if resp.GetValid() {
-		t.Fatalf("expected invalid with cancelled context")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got: %v", err)
 	}
 }
