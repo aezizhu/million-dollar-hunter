@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/alchemy"
@@ -66,10 +67,17 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 	}, nil
 }
 
-func (s *Service) Enqueue(job models.IngestionJob) {
+func (s *Service) Enqueue(job models.IngestionJob) error {
 	select {
 	case s.jobch <- job:
+		return nil
 	default:
+		s.logger.Warn().
+			Str("wallet", job.Wallet).
+			Str("chain", job.Chain).
+			Int("queue_depth", len(s.jobch)).
+			Msg("job queue full, rejecting job")
+		return fmt.Errorf("job queue full (depth: %d/%d)", len(s.jobch), cap(s.jobch))
 	}
 }
 
@@ -246,4 +254,50 @@ VALUES ($1, $2, $3)
 	}
 
 	return nil
+}
+
+func (s *Service) Close() error {
+	s.logger.Info().Msg("closing service")
+	
+	if s.producer != nil {
+		s.logger.Info().Msg("closing kafka producer")
+		if err := s.producer.Close(); err != nil {
+			return fmt.Errorf("close producer: %w", err)
+		}
+	}
+	
+	return nil
+}
+
+func (s *Service) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	status := "ok"
+	kafkaStatus := "enabled"
+	
+	if s.cfg.KafkaEnabled {
+		if s.producer == nil {
+			status = "degraded"
+			kafkaStatus = "unavailable"
+		}
+	} else {
+		kafkaStatus = "disabled"
+	}
+	
+	queueDepth := len(s.jobch)
+	
+	response := map[string]interface{}{
+		"status":       status,
+		"kafka":        kafkaStatus,
+		"queue_depth":  queueDepth,
+		"queue_capacity": cap(s.jobch),
+	}
+	
+	statusCode := http.StatusOK
+	if status == "degraded" {
+		statusCode = http.StatusServiceUnavailable
+	}
+	
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(response)
 }

@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/config"
@@ -15,7 +17,8 @@ import (
 
 func main() {
 	_ = os.Setenv("TZ", "UTC")
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -38,22 +41,44 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("service init")
 	}
+	defer func() {
+		if err := svc.Close(); err != nil {
+			logger.Error().Err(err).Msg("service close")
+		}
+	}()
 
 	go svc.StartWorkers(ctx)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
-	})
+	mux.HandleFunc("/healthz", svc.HealthCheckHandler)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	logger.Info().Str("addr", srv.Addr).Msg("listening")
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Fatal().Err(err).Msg("http server")
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		logger.Info().Str("addr", srv.Addr).Msg("listening")
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Error().Err(err).Msg("http server")
+		}
+	}()
+
+	<-sigChan
+	logger.Info().Msg("received shutdown signal, gracefully shutting down")
+
+	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error().Err(err).Msg("http server shutdown")
 	}
+
+	logger.Info().Msg("shutdown complete")
 }

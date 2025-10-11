@@ -44,6 +44,21 @@ jobs:
         ports:
           - 6379:6379
 
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+          CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+        ports:
+          - 9092:9092
+
       wiremock:
         image: wiremock/wiremock:3.7.0
         ports:
@@ -89,6 +104,8 @@ jobs:
         echo "DATABASE_URL=postgres://postgres:postgres@localhost:5432/ingestion?sslmode=disable" >> $GITHUB_ENV
         echo "ALCHEMY_API_KEY=test" >> $GITHUB_ENV
         echo "MORALIS_API_KEY=test" >> $GITHUB_ENV
+        echo "KAFKA_BROKERS=localhost:9092" >> $GITHUB_ENV
+        echo "KAFKA_TOPIC_TX_INGESTED=TransactionDataIngested" >> $GITHUB_ENV
 
     - name: Run tests
       run: GOWORK=off go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
