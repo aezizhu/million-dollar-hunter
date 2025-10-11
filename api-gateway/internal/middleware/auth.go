@@ -23,7 +23,7 @@ func Auth(cfg config.Config, authConn *grpc.ClientConn) gin.HandlerFunc {
 		}
 		tokenStr := strings.TrimPrefix(h, "Bearer ")
 
-		if cfg.AuthValidateMode == "grpc" && authConn != nil {
+	if cfg.AuthValidateMode == "grpc" && authConn != nil {
 			cli := gen.NewAuthServiceClient(authConn)
 			ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 			defer cancel()
@@ -31,7 +31,11 @@ func Auth(cfg config.Config, authConn *grpc.ClientConn) gin.HandlerFunc {
 				Token:       tokenStr,
 				ExpectedAud: cfg.JWTAudience,
 			})
-			if err != nil || !resp.GetValid() {
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+				return
+			}
+			if !resp.GetValid() {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
 				return
 			}

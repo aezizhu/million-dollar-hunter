@@ -79,8 +79,8 @@ Source: `openapi.yaml` - API Gateway (Agent B)
 
 | RPC Method | Status | Purpose | Notes |
 |------------|--------|---------|-------|
-| `ValidateToken` | Completed (Tested) | Validate JWT token | Implemented via gRPC using JWT manager |
-| `GenerateTokens` | Completed (Tested) | Generate access + refresh tokens | Implemented via gRPC using JWT manager |
+| `ValidateToken` | Completed (Unit Tests Only - E2E Pending) | Validate JWT token | Implemented via gRPC using JWT manager |
+| `GenerateTokens` | Completed (Unit Tests Only - E2E Pending) | Generate access + refresh tokens | Implemented via gRPC using JWT manager |
 
 **Proto File**: `services/auth-service/api/auth.proto`
 

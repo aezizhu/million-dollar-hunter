@@ -71,6 +71,14 @@ func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Durat
 }
 
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) *clients.GRPCClients {
+	if cfg.AuthValidateMode == "grpc" {
+		if cfg.AuthGRPCAddr == "" {
+			logger.Fatal().Msg("AUTH_GRPC_ADDR is required when AUTH_VALIDATE_MODE=grpc")
+		}
+		if cfg.JWTAudience == "" {
+			logger.Fatal().Msg("JWT_AUDIENCE is required when AUTH_VALIDATE_MODE=grpc")
+		}
+	}
 	grpcClients := clients.NewGRPCClients(cfg.PortfolioServiceURL, cfg.MarketDataServiceURL, cfg.AuthGRPCAddr, logger)
 
 	httpMetrics := observability.NewHTTPMetrics(reg, cfg.PrometheusNamespace)
