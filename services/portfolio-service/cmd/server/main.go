@@ -37,7 +37,15 @@ func main() {
 		log.Fatalf("env parse: %v", err)
 	}
 
-	db, err := repository.NewPostgres(cfg.DatabaseURL)
+	poolCfg := repository.PoolConfig{
+		MaxConns:          cfg.DBMaxConns,
+		MinConns:          cfg.DBMinConns,
+		MaxConnLifetime:   cfg.DBMaxConnLifetime,
+		MaxConnIdleTime:   cfg.DBMaxConnIdleTime,
+		HealthCheckPeriod: cfg.DBHealthCheckPeriod,
+	}
+
+	db, err := repository.NewPostgres(cfg.DatabaseURL, poolCfg)
 	if err != nil {
 		log.Fatalf("db connect: %v", err)
 	}
