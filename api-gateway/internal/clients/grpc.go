@@ -11,43 +11,28 @@ type GRPCClients struct {
 	MarketDataConn *grpc.ClientConn
 }
 
+//
 func NewGRPCClients(portfolioAddr, marketDataAddr string, logger zerolog.Logger) *GRPCClients {
 	clients := &GRPCClients{}
 
 	if portfolioAddr != "" {
-		conn, err := grpc.NewClient(portfolioAddr,
+		conn, _ := grpc.NewClient(portfolioAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
-		if err != nil {
-			logger.Warn().Err(err).Str("addr", portfolioAddr).Msg("Failed to create portfolio service client")
-		} else {
-			clients.PortfolioConn = conn
-			logger.Info().Str("addr", portfolioAddr).Msg("Portfolio service client initialized (non-blocking)")
-			
-			go func() {
-				state := conn.GetState()
-				conn.Connect()
-				logger.Debug().Str("state", state.String()).Msg("Portfolio service connection state")
-			}()
-		}
+		clients.PortfolioConn = conn
+		logger.Info().
+			Str("addr", portfolioAddr).
+			Msg("Portfolio service client created (connection will be established on first use)")
 	}
 
 	if marketDataAddr != "" {
-		conn, err := grpc.NewClient(marketDataAddr,
+		conn, _ := grpc.NewClient(marketDataAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
-		if err != nil {
-			logger.Warn().Err(err).Str("addr", marketDataAddr).Msg("Failed to create market data service client")
-		} else {
-			clients.MarketDataConn = conn
-			logger.Info().Str("addr", marketDataAddr).Msg("Market data service client initialized (non-blocking)")
-			
-			go func() {
-				state := conn.GetState()
-				conn.Connect()
-				logger.Debug().Str("state", state.String()).Msg("Market data service connection state")
-			}()
-		}
+		clients.MarketDataConn = conn
+		logger.Info().
+			Str("addr", marketDataAddr).
+			Msg("Market data service client created (connection will be established on first use)")
 	}
 
 	return clients

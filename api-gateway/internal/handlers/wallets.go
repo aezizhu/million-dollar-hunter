@@ -96,9 +96,7 @@ func GetWallet(portfolioConn *grpc.ClientConn, logger zerolog.Logger) gin.Handle
 
 		c.JSON(http.StatusOK, gin.H{
 			"address": address,
-			"chain":   c.Query("chain"),
 			"assets":  assets,
-			"history": []interface{}{},
 		})
 	}
 }
