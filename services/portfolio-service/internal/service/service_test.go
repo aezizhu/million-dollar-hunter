@@ -20,6 +20,11 @@ type MockRepo struct {
 	mock.Mock
 }
 
+func (m *MockRepo) VerifyWalletOwnership(ctx context.Context, userID, walletID string) error {
+	args := m.Called(ctx, userID, walletID)
+	return args.Error(0)
+}
+
 func (m *MockRepo) GetPortfolioSummary(ctx context.Context, userID string) ([]repository.WalletSummary, float64, error) {
 	args := m.Called(ctx, userID)
 	return args.Get(0).([]repository.WalletSummary), args.Get(1).(float64), args.Error(2)
@@ -108,8 +113,10 @@ func TestGetWalletDetails(t *testing.T) {
 	svc := New(mockRepo, cfg)
 
 	t.Run("success", func(t *testing.T) {
+		userID := "user123"
+		walletID := "wallet1"
 		details := &repository.WalletDetails{
-			WalletID: "wallet1",
+			WalletID: walletID,
 			Address:  "0x123",
 			Chain:    "ethereum",
 			Assets: []repository.Asset{
@@ -118,10 +125,12 @@ func TestGetWalletDetails(t *testing.T) {
 			TotalUSDValue: 1000,
 		}
 
-		mockRepo.On("GetWalletDetails", mock.Anything, "wallet1", "").
+		mockRepo.On("VerifyWalletOwnership", mock.Anything, userID, walletID).
+			Return(nil).Once()
+		mockRepo.On("GetWalletDetails", mock.Anything, walletID, "").
 			Return(details, nil).Once()
 
-		req := &pb.GetWalletDetailsRequest{WalletId: "wallet1"}
+		req := &pb.GetWalletDetailsRequest{UserId: userID, WalletId: walletID}
 		resp, err := svc.GetWalletDetails(context.Background(), req)
 
 		assert.NoError(t, err)
@@ -134,10 +143,14 @@ func TestGetWalletDetails(t *testing.T) {
 	})
 
 	t.Run("wallet not found", func(t *testing.T) {
-		mockRepo.On("GetWalletDetails", mock.Anything, "wallet1", "").
+		userID := "user123"
+		walletID := "wallet1"
+		mockRepo.On("VerifyWalletOwnership", mock.Anything, userID, walletID).
+			Return(nil).Once()
+		mockRepo.On("GetWalletDetails", mock.Anything, walletID, "").
 			Return(nil, pgx.ErrNoRows).Once()
 
-		req := &pb.GetWalletDetailsRequest{WalletId: "wallet1"}
+		req := &pb.GetWalletDetailsRequest{UserId: userID, WalletId: walletID}
 		resp, err := svc.GetWalletDetails(context.Background(), req)
 
 		assert.Error(t, err)
@@ -147,15 +160,43 @@ func TestGetWalletDetails(t *testing.T) {
 	})
 
 	t.Run("internal error", func(t *testing.T) {
-		mockRepo.On("GetWalletDetails", mock.Anything, "wallet1", "").
+		userID := "user123"
+		walletID := "wallet1"
+		mockRepo.On("VerifyWalletOwnership", mock.Anything, userID, walletID).
+			Return(nil).Once()
+		mockRepo.On("GetWalletDetails", mock.Anything, walletID, "").
 			Return(nil, errors.New("database connection failed")).Once()
 
-		req := &pb.GetWalletDetailsRequest{WalletId: "wallet1"}
+		req := &pb.GetWalletDetailsRequest{UserId: userID, WalletId: walletID}
 		resp, err := svc.GetWalletDetails(context.Background(), req)
 
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Equal(t, codes.Internal, status.Code(err))
+		mockRepo.AssertExpectations(t)
+	})
+
+	t.Run("missing user_id", func(t *testing.T) {
+		req := &pb.GetWalletDetailsRequest{UserId: "", WalletId: "wallet1"}
+		resp, err := svc.GetWalletDetails(context.Background(), req)
+
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+
+	t.Run("wallet ownership verification fails", func(t *testing.T) {
+		userID := "user123"
+		walletID := "wallet1"
+		mockRepo.On("VerifyWalletOwnership", mock.Anything, userID, walletID).
+			Return(errors.New("wallet not found or access denied")).Once()
+
+		req := &pb.GetWalletDetailsRequest{UserId: userID, WalletId: walletID}
+		resp, err := svc.GetWalletDetails(context.Background(), req)
+
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
 		mockRepo.AssertExpectations(t)
 	})
 }
@@ -265,8 +306,8 @@ func TestExport(t *testing.T) {
 			TotalUSDValue: 1000,
 		}
 
-		mockRepo.On("UserOwnsWallet", mock.Anything, userID, validWalletID).
-			Return(true, nil).Once()
+		mockRepo.On("VerifyWalletOwnership", mock.Anything, userID, validWalletID).
+			Return(nil).Once()
 		mockRepo.On("GetPortfolioByWalletID", mock.Anything, validWalletID).
 			Return(portfolio, nil).Once()
 
@@ -295,8 +336,8 @@ func TestExport(t *testing.T) {
 			TotalUSDValue: 1000,
 		}
 
-		mockRepo.On("UserOwnsWallet", mock.Anything, userID, validWalletID).
-			Return(true, nil).Once()
+		mockRepo.On("VerifyWalletOwnership", mock.Anything, userID, validWalletID).
+			Return(nil).Once()
 		mockRepo.On("GetPortfolioByWalletID", mock.Anything, validWalletID).
 			Return(portfolio, nil).Once()
 
@@ -317,8 +358,8 @@ func TestExport(t *testing.T) {
 	t.Run("wallet not found", func(t *testing.T) {
 		userID := "user123"
 		validWalletID := "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
-		mockRepo.On("UserOwnsWallet", mock.Anything, userID, validWalletID).
-			Return(true, nil).Once()
+		mockRepo.On("VerifyWalletOwnership", mock.Anything, userID, validWalletID).
+			Return(nil).Once()
 		mockRepo.On("GetPortfolioByWalletID", mock.Anything, validWalletID).
 			Return(nil, pgx.ErrNoRows).Once()
 
@@ -365,6 +406,21 @@ func TestExport(t *testing.T) {
 		assert.Error(t, err)
 		assert.Nil(t, resp)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+
+	t.Run("wallet ownership verification fails", func(t *testing.T) {
+		userID := "user123"
+		validWalletID := "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
+		mockRepo.On("VerifyWalletOwnership", mock.Anything, userID, validWalletID).
+			Return(errors.New("wallet not found or access denied")).Once()
+
+		req := &pb.ExportRequest{UserId: userID, WalletId: validWalletID, Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
+		resp, err := svc.Export(context.Background(), req)
+
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		mockRepo.AssertExpectations(t)
 	})
 }
 

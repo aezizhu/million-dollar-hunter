@@ -23,6 +23,7 @@ import (
 )
 
 type Repository interface {
+	VerifyWalletOwnership(ctx context.Context, userID, walletID string) error
 	GetPortfolioSummary(ctx context.Context, userID string) ([]repository.WalletSummary, float64, error)
 	GetWalletDetails(ctx context.Context, walletID, address string) (*repository.WalletDetails, error)
 	GetTransactionHistory(ctx context.Context, walletID, address string, page, limit int32, filterByType string) (*repository.TransactionResult, error)
@@ -86,12 +87,8 @@ func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*
 		return nil, status.Error(codes.InvalidArgument, "invalid wallet_id format")
 	}
 
-	owned, err := s.repo.UserOwnsWallet(ctx, req.GetUserId(), req.GetWalletId())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ownership check failed: %v", err)
-	}
-	if !owned {
-		return nil, status.Error(codes.PermissionDenied, "not authorized to export this wallet")
+	if err := s.repo.VerifyWalletOwnership(ctx, req.GetUserId(), req.GetWalletId()); err != nil {
+		return nil, status.Error(codes.PermissionDenied, "wallet not found or access denied")
 	}
 
 	portfolio, err := s.repo.GetPortfolioByWalletID(ctx, req.GetWalletId())
@@ -219,6 +216,22 @@ func (s *PortfolioService) GetPortfolioSummary(ctx context.Context, req *pb.GetP
 }
 
 func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWalletDetailsRequest) (*pb.GetWalletDetailsResponse, error) {
+	if req.GetUserId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	walletIdentifier := req.GetWalletId()
+	if walletIdentifier == "" {
+		walletIdentifier = req.GetAddress()
+	}
+	if walletIdentifier == "" {
+		return nil, status.Error(codes.InvalidArgument, "wallet_id or address is required")
+	}
+
+	if err := s.repo.VerifyWalletOwnership(ctx, req.GetUserId(), walletIdentifier); err != nil {
+		return nil, status.Error(codes.PermissionDenied, "wallet not found or access denied")
+	}
+
 	details, err := s.repo.GetWalletDetails(ctx, req.GetWalletId(), req.GetAddress())
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) || err.Error() == "wallet not found" {

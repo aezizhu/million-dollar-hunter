@@ -64,8 +64,9 @@ message GetPortfolioSummaryResponse {
 }
 
 message GetWalletDetailsRequest {
-  string wallet_id = 1;
-  string address = 2;
+  string user_id = 1;
+  string wallet_id = 2;
+  string address = 3;
 }
 
 message GetWalletDetailsResponse {

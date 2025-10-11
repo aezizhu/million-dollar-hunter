@@ -79,6 +79,29 @@ func (r *Repo) Close(ctx context.Context) {
 	r.db.Close()
 }
 
+func (r *Repo) VerifyWalletOwnership(ctx context.Context, userID, walletID string) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	var exists bool
+	err := r.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM wallets 
+			WHERE (id = $1 OR address = $1) AND user_id = $2
+		)
+	`, walletID, userID).Scan(&exists)
+	
+	if err != nil {
+		return fmt.Errorf("check wallet ownership: %w", err)
+	}
+	
+	if !exists {
+		return errors.New("wallet not found or access denied")
+	}
+	
+	return nil
+}
+
 type Portfolio struct {
 	WalletID      string
 	Assets        []Asset
