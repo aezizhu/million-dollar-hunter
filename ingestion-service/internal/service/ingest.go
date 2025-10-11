@@ -94,6 +94,53 @@ func (s *Service) Enqueue(job models.IngestionJob) error {
 	}
 }
 
+func (s *Service) HandleWalletTrackingRequest(ctx context.Context, event kafka.WalletTrackingRequestedEvent) error {
+	s.logger.Info().
+		Str("wallet_address", event.WalletAddress).
+		Str("chain", event.Chain).
+		Str("event_id", event.EventID).
+		Str("user_id", event.UserID).
+		Str("nickname", event.Nickname).
+		Msg("processing wallet tracking request")
+
+	job := models.IngestionJob{
+		Wallet: event.WalletAddress,
+		Chain:  event.Chain,
+	}
+
+	if err := s.Enqueue(job); err != nil {
+		s.logger.Error().
+			Err(err).
+			Str("wallet_address", event.WalletAddress).
+			Str("chain", event.Chain).
+			Msg("failed to enqueue ingestion job")
+		return fmt.Errorf("enqueue job: %w", err)
+	}
+
+	s.logger.Info().
+		Str("wallet_address", event.WalletAddress).
+		Str("chain", event.Chain).
+		Msg("wallet tracking request enqueued successfully")
+
+	return nil
+}
+
+func (s *Service) InitConsumer(ctx context.Context) (*kafka.Consumer, error) {
+	brokers := strings.Split(s.cfg.KafkaBrokers, ",")
+	consumer, err := kafka.NewConsumer(
+		ctx,
+		brokers,
+		s.cfg.KafkaConsumerGroupID,
+		s.cfg.KafkaTopicWalletTracking,
+		s.logger,
+		s,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create kafka consumer: %w", err)
+	}
+	return consumer, nil
+}
+
 func (s *Service) StartWorkers(ctx context.Context) {
 	for i := 0; i < 4; i++ {
 		go s.worker(ctx)
