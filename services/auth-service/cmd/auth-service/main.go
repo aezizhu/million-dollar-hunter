@@ -26,6 +26,22 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse config")
 	}
+
+	if os.Getenv("ENABLE_MULTI_USER") != "true" {
+		if os.Getenv("MVP_USERNAME") == "" {
+			log.Fatal().Msg("MVP_USERNAME environment variable is required when ENABLE_MULTI_USER is false")
+		}
+		if os.Getenv("MVP_PASSWORD") == "" {
+			log.Fatal().Msg("MVP_PASSWORD environment variable is required when ENABLE_MULTI_USER is false")
+		}
+		log.Info().Msg("Running in MVP mode with hardcoded credentials")
+	} else {
+		if os.Getenv("DATABASE_URL") == "" {
+			log.Fatal().Msg("DATABASE_URL environment variable is required when ENABLE_MULTI_USER is true")
+		}
+		log.Info().Msg("Running in multi-user mode with database authentication")
+	}
+
 	j := jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
 
 	mux := http.NewServeMux()
