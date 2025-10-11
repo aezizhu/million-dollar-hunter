@@ -15,6 +15,8 @@ type Config struct {
 	TopicPortfolioUpdated string        `env:"TOPIC_PORTFOLIO_UPDATED,notEmpty" envDefault:"PortfolioUpdated"`
 	GroupID               string        `env:"KAFKA_GROUP_ID,notEmpty" envDefault:"portfolio-service"`
 	ExportDir             string        `env:"EXPORT_DIR,notEmpty" envDefault:"/data/exports"`
+	ExportCleanupTTL      time.Duration `env:"EXPORT_CLEANUP_TTL" envDefault:"1h"`
+	ExportCleanupInterval time.Duration `env:"EXPORT_CLEANUP_INTERVAL" envDefault:"15m"`
 	// Logging configuration - reserved for future structured logging implementation
 	LogLevel              string        `env:"LOG_LEVEL" envDefault:"info"`
 	LogFormat             string        `env:"LOG_FORMAT" envDefault:"json"`

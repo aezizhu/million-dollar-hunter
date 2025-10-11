@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/cleanup"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/kafka"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
@@ -25,6 +26,18 @@ type server struct {
 
 func (s *server) GetPortfolio(ctx context.Context, req *pb.GetPortfolioRequest) (*pb.GetPortfolioResponse, error) {
 	return s.svc.GetPortfolio(ctx, req)
+}
+
+func (s *server) GetPortfolioSummary(ctx context.Context, req *pb.GetPortfolioSummaryRequest) (*pb.GetPortfolioSummaryResponse, error) {
+	return s.svc.GetPortfolioSummary(ctx, req)
+}
+
+func (s *server) GetWalletDetails(ctx context.Context, req *pb.GetWalletDetailsRequest) (*pb.GetWalletDetailsResponse, error) {
+	return s.svc.GetWalletDetails(ctx, req)
+}
+
+func (s *server) GetTransactionHistory(ctx context.Context, req *pb.GetTransactionHistoryRequest) (*pb.GetTransactionHistoryResponse, error) {
+	return s.svc.GetTransactionHistory(ctx, req)
 }
 
 func (s *server) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportResponse, error) {
@@ -57,7 +70,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("kafka consumer: %v", err)
 	}
+	
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	
 	go consumer.Run()
+
+	exportCleanup := cleanup.NewExportCleanup(cfg.ExportDir, cfg.ExportCleanupTTL, cfg.ExportCleanupInterval)
+	go exportCleanup.Start(ctx)
 
 	lis, err := net.Listen("tcp", cfg.GRPCAddr)
 	if err != nil {
@@ -76,6 +96,10 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
+	
+	log.Printf("Shutting down gracefully...")
+	cancel()
 	grpcServer.GracefulStop()
 	consumer.Stop()
+	log.Printf("Shutdown complete")
 }

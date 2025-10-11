@@ -5,12 +5,16 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
-	"time"
+	"strings"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
@@ -18,12 +22,23 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type Repository interface {
+	VerifyWalletOwnership(ctx context.Context, userID, walletID string) error
+	GetPortfolioSummary(ctx context.Context, userID string) ([]repository.WalletSummary, float64, error)
+	GetWalletDetails(ctx context.Context, walletID, address string) (*repository.WalletDetails, error)
+	GetTransactionHistory(ctx context.Context, walletID, address string, page, limit int32, filterByType string) (*repository.TransactionResult, error)
+	GetPortfolioByWalletID(ctx context.Context, walletID string) (*repository.Portfolio, error)
+	UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string) (bool, error)
+	UpsertFromIngest(ctx context.Context, payload []byte) error
+	Close(ctx context.Context)
+}
+
 type PortfolioService struct {
-	repo *repository.Repo
+	repo Repository
 	cfg  config.Config
 }
 
-func New(repo *repository.Repo, cfg config.Config) *PortfolioService {
+func New(repo Repository, cfg config.Config) *PortfolioService {
 	return &PortfolioService{repo: repo, cfg: cfg}
 }
 
@@ -60,20 +75,43 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, req *pb.GetPortfoli
 }
 
 func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportResponse, error) {
+	if req.GetUserId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
 	if req.GetWalletId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "wallet_id is required")
 	}
 
-	portfolio, err := s.repo.GetPortfolioByWalletID(ctx, req.GetWalletId())
-	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "wallet not found: %v", err)
+	if !isValidWalletID(req.GetWalletId()) {
+		return nil, status.Error(codes.InvalidArgument, "invalid wallet_id format")
 	}
 
-	if err := os.MkdirAll(s.cfg.ExportDir, 0o755); err != nil {
+	if err := s.repo.VerifyWalletOwnership(ctx, req.GetUserId(), req.GetWalletId()); err != nil {
+		return nil, status.Error(codes.PermissionDenied, "wallet not found or access denied")
+	}
+
+	portfolio, err := s.repo.GetPortfolioByWalletID(ctx, req.GetWalletId())
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.NotFound, "wallet not found")
+		}
+		return nil, status.Errorf(codes.Internal, "fetch portfolio: %v", err)
+	}
+
+	absExportDir, err := filepath.Abs(s.cfg.ExportDir)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "invalid export dir config: %v", err)
+	}
+
+	if err := os.MkdirAll(absExportDir, 0o755); err != nil {
 		return nil, status.Errorf(codes.Internal, "create export dir: %v", err)
 	}
 
-	filename := fmt.Sprintf("portfolio_%s_%d", req.GetWalletId(), time.Now().Unix())
+	safeUserID := sanitizeForFilename(req.GetUserId())
+	safeWalletID := sanitizeForFilename(req.GetWalletId())
+	exportID := uuid.New().String()
+	filename := fmt.Sprintf("portfolio_%s_%s_%s", safeUserID, safeWalletID, exportID)
 	var data []byte
 
 	if req.GetFormat() == pb.ExportFormat_EXPORT_FORMAT_JSON {
@@ -90,12 +128,39 @@ func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*
 		}
 	}
 
-	path := filepath.Join(s.cfg.ExportDir, filename)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	fullPath := filepath.Join(absExportDir, filename)
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "invalid export path: %v", err)
+	}
+
+	if !strings.HasPrefix(absPath, absExportDir+string(filepath.Separator)) {
+		return nil, status.Error(codes.InvalidArgument, "invalid wallet_id: contains illegal characters")
+	}
+
+	if err := os.WriteFile(absPath, data, 0o644); err != nil {
 		return nil, status.Errorf(codes.Internal, "write file: %v", err)
 	}
 
 	return &pb.ExportResponse{Path: filename}, nil
+}
+
+func isValidWalletID(id string) bool {
+	if matched, _ := regexp.MatchString(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, strings.ToLower(id)); matched {
+		return true
+	}
+	if matched, _ := regexp.MatchString(`^0x[0-9a-fA-F]{40}$`, id); matched {
+		return true
+	}
+	return false
+}
+
+func sanitizeForFilename(input string) string {
+	safe := strings.ReplaceAll(input, "..", "_")
+	safe = strings.ReplaceAll(safe, "/", "_")
+	safe = strings.ReplaceAll(safe, "\\", "_")
+	safe = strings.ReplaceAll(safe, "\x00", "_")
+	return safe
 }
 
 func (s *PortfolioService) generateCSV(portfolio *repository.Portfolio) ([]byte, error) {
@@ -125,4 +190,107 @@ func (s *PortfolioService) generateCSV(portfolio *repository.Portfolio) ([]byte,
 	}
 
 	return buf.Bytes(), nil
+}
+
+func (s *PortfolioService) GetPortfolioSummary(ctx context.Context, req *pb.GetPortfolioSummaryRequest) (*pb.GetPortfolioSummaryResponse, error) {
+	wallets, totalNetWorth, err := s.repo.GetPortfolioSummary(ctx, req.GetUserId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fetch portfolio summary: %v", err)
+	}
+
+	pbWallets := make([]*pb.Wallet, 0, len(wallets))
+	for _, w := range wallets {
+		pbWallets = append(pbWallets, &pb.Wallet{
+			Id:            w.ID,
+			Address:       w.Address,
+			Chain:         w.Chain,
+			TotalUsdValue: w.TotalUSDValue,
+			AssetCount:    w.AssetCount,
+		})
+	}
+
+	return &pb.GetPortfolioSummaryResponse{
+		Wallets:        pbWallets,
+		TotalNetWorth:  totalNetWorth,
+	}, nil
+}
+
+func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWalletDetailsRequest) (*pb.GetWalletDetailsResponse, error) {
+	if req.GetUserId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	walletIdentifier := req.GetWalletId()
+	if walletIdentifier == "" {
+		walletIdentifier = req.GetAddress()
+	}
+	if walletIdentifier == "" {
+		return nil, status.Error(codes.InvalidArgument, "wallet_id or address is required")
+	}
+
+	if err := s.repo.VerifyWalletOwnership(ctx, req.GetUserId(), walletIdentifier); err != nil {
+		return nil, status.Error(codes.PermissionDenied, "wallet not found or access denied")
+	}
+
+	details, err := s.repo.GetWalletDetails(ctx, req.GetWalletId(), req.GetAddress())
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || err.Error() == "wallet not found" {
+			return nil, status.Error(codes.NotFound, "wallet not found")
+		}
+		return nil, status.Errorf(codes.Internal, "fetch wallet details: %v", err)
+	}
+
+	assets := make([]*pb.Asset, 0, len(details.Assets))
+	for _, a := range details.Assets {
+		assets = append(assets, &pb.Asset{
+			TokenAddress: a.TokenAddress,
+			Symbol:       a.Symbol,
+			Name:         a.Name,
+			Amount:       a.CurrentBalance,
+			UsdValue:     a.USDValue,
+		})
+	}
+
+	return &pb.GetWalletDetailsResponse{
+		WalletId:      details.WalletID,
+		Address:       details.Address,
+		Chain:         details.Chain,
+		Assets:        assets,
+		TotalUsdValue: details.TotalUSDValue,
+	}, nil
+}
+
+func (s *PortfolioService) GetTransactionHistory(ctx context.Context, req *pb.GetTransactionHistoryRequest) (*pb.GetTransactionHistoryResponse, error) {
+	result, err := s.repo.GetTransactionHistory(
+		ctx,
+		req.GetWalletId(),
+		req.GetAddress(),
+		req.GetPage(),
+		req.GetLimit(),
+		req.GetFilterByType(),
+	)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fetch transaction history: %v", err)
+	}
+
+	transactions := make([]*pb.Transaction, 0, len(result.Transactions))
+	for _, t := range result.Transactions {
+		transactions = append(transactions, &pb.Transaction{
+			Hash:         t.Hash,
+			From:         t.From,
+			To:           t.To,
+			Amount:       t.Amount,
+			Symbol:       t.Symbol,
+			TokenAddress: t.TokenAddress,
+			Timestamp:    t.Timestamp.Unix(),
+			Type:         t.Type,
+		})
+	}
+
+	return &pb.GetTransactionHistoryResponse{
+		Transactions: transactions,
+		TotalCount:   result.TotalCount,
+		Page:         req.GetPage(),
+		Limit:        req.GetLimit(),
+	}, nil
 }

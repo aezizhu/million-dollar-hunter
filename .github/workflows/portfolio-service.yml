@@ -1,0 +1,37 @@
+name: portfolio-service
+
+on:
+  push:
+    paths:
+      - 'services/portfolio-service/**'
+      - '.github/workflows/portfolio-service.yml'
+  pull_request:
+    paths:
+      - 'services/portfolio-service/**'
+      - '.github/workflows/portfolio-service.yml'
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Build
+        env:
+          GOWORK: off
+        run: |
+          cd services/portfolio-service
+          go build ./...
+
+      - name: Test
+        env:
+          GOWORK: off
+        run: |
+          cd services/portfolio-service
+          go test ./...
