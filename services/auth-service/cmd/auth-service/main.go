@@ -14,9 +14,11 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"google.golang.org/grpc"
 
+	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/config"
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
+	grpcserver "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/grpc"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
@@ -88,6 +90,8 @@ func main() {
 	}
 
 	grpcSrv := grpc.NewServer()
+	gen.RegisterAuthServiceServer(grpcSrv, grpcserver.New(j))
+
 	grpcLn, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to start gRPC listener")
