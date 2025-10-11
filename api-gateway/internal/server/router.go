@@ -71,7 +71,7 @@ func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Durat
 }
 
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) *clients.GRPCClients {
-	grpcClients := clients.NewGRPCClients(cfg.PortfolioServiceURL, cfg.MarketDataServiceURL, logger)
+	grpcClients := clients.NewGRPCClients(cfg.PortfolioServiceURL, cfg.MarketDataServiceURL, cfg.AuthGRPCAddr, logger)
 
 	httpMetrics := observability.NewHTTPMetrics(reg, cfg.PrometheusNamespace)
 	r.Use(func(c *gin.Context) {
@@ -125,7 +125,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 	api := r.Group("/api/v1")
 	api.Use(middleware.Metrics(httpMetrics))
 	api.Use(middleware.RateLimit(limiter))
-	api.Use(middleware.Auth(cfg))
+	api.Use(middleware.Auth(cfg, grpcClients.AuthConn))
 	api.Use(middleware.Tracing())
 
 	var portfolioConn, marketDataConn *grpc.ClientConn

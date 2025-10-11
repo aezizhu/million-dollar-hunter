@@ -14,7 +14,10 @@ type Config struct {
 	AuthServiceURL          string
 	PortfolioServiceURL     string
 	MarketDataServiceURL    string
+	AuthValidateMode        string
+	AuthGRPCAddr            string
 	JWTSecret               string
+	JWTAudience             string
 	FrontendURL             string
 	OTLPEndpoint            string
 	PrometheusNamespace     string
@@ -63,7 +66,10 @@ func Load() Config {
 		AuthServiceURL:          os.Getenv("AUTH_SERVICE_URL"),
 		PortfolioServiceURL:     os.Getenv("PORTFOLIO_SERVICE_URL"),
 		MarketDataServiceURL:    os.Getenv("MARKET_DATA_SERVICE_URL"),
+		AuthValidateMode:        getenv("AUTH_VALIDATE_MODE", "local"),
+		AuthGRPCAddr:            os.Getenv("AUTH_GRPC_ADDR"),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
+		JWTAudience:             os.Getenv("JWT_AUDIENCE"),
 		FrontendURL:             getenv("FRONTEND_URL", "*"),
 		OTLPEndpoint:            os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 		PrometheusNamespace:     getenv("PROMETHEUS_NAMESPACE", "api_gateway"),

@@ -1,17 +1,20 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"google.golang.org/grpc"
 
+	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
 )
 
-func Auth(cfg config.Config) gin.HandlerFunc {
+func Auth(cfg config.Config, authConn *grpc.ClientConn) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		h := c.GetHeader("Authorization")
 		if !strings.HasPrefix(h, "Bearer ") {
@@ -19,6 +22,26 @@ func Auth(cfg config.Config) gin.HandlerFunc {
 			return
 		}
 		tokenStr := strings.TrimPrefix(h, "Bearer ")
+
+		if cfg.AuthValidateMode == "grpc" && authConn != nil {
+			cli := gen.NewAuthServiceClient(authConn)
+			ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+			defer cancel()
+			resp, err := cli.ValidateToken(ctx, &gen.ValidateRequest{
+				Token:       tokenStr,
+				ExpectedAud: cfg.JWTAudience,
+			})
+			if err != nil || !resp.GetValid() {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+				return
+			}
+			if uid := resp.GetUserId(); uid != "" {
+				c.Set("user_id", uid)
+			}
+			c.Next()
+			return
+		}
+
 		if cfg.JWTSecret != "" {
 			tok, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
