@@ -15,8 +15,10 @@ type Config struct {
 	TopicPortfolioUpdated string        `env:"TOPIC_PORTFOLIO_UPDATED,notEmpty" envDefault:"PortfolioUpdated"`
 	GroupID               string        `env:"KAFKA_GROUP_ID,notEmpty" envDefault:"portfolio-service"`
 	ExportDir             string        `env:"EXPORT_DIR,notEmpty" envDefault:"/data/exports"`
+	// Logging configuration - reserved for future structured logging implementation
 	LogLevel              string        `env:"LOG_LEVEL" envDefault:"info"`
 	LogFormat             string        `env:"LOG_FORMAT" envDefault:"json"`
+	// Observability configuration - reserved for future instrumentation
 	OTELEndpoint          string        `env:"OTEL_EXPORTER_OTLP_ENDPOINT" envDefault:""`
 	PrometheusNamespace   string        `env:"PROMETHEUS_NAMESPACE" envDefault:"portfolio_service"`
 }
