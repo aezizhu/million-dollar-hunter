@@ -57,6 +57,11 @@ func (m *MockRepo) UpsertFromIngest(ctx context.Context, payload []byte) error {
 func (m *MockRepo) Close(ctx context.Context) {
 	m.Called(ctx)
 }
+func (m *MockRepo) UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string) (bool, error) {
+	args := m.Called(ctx, userID, walletIDOrAddr)
+	return args.Bool(0), args.Error(1)
+}
+
 
 func TestGetPortfolioSummary(t *testing.T) {
 	mockRepo := new(MockRepo)
@@ -260,6 +265,8 @@ func TestExport(t *testing.T) {
 			TotalUSDValue: 1000,
 		}
 
+		mockRepo.On("UserOwnsWallet", mock.Anything, userID, validWalletID).
+			Return(true, nil).Once()
 		mockRepo.On("GetPortfolioByWalletID", mock.Anything, validWalletID).
 			Return(portfolio, nil).Once()
 
@@ -288,6 +295,8 @@ func TestExport(t *testing.T) {
 			TotalUSDValue: 1000,
 		}
 
+		mockRepo.On("UserOwnsWallet", mock.Anything, userID, validWalletID).
+			Return(true, nil).Once()
 		mockRepo.On("GetPortfolioByWalletID", mock.Anything, validWalletID).
 			Return(portfolio, nil).Once()
 
@@ -308,6 +317,8 @@ func TestExport(t *testing.T) {
 	t.Run("wallet not found", func(t *testing.T) {
 		userID := "user123"
 		validWalletID := "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
+		mockRepo.On("UserOwnsWallet", mock.Anything, userID, validWalletID).
+			Return(true, nil).Once()
 		mockRepo.On("GetPortfolioByWalletID", mock.Anything, validWalletID).
 			Return(nil, pgx.ErrNoRows).Once()
 

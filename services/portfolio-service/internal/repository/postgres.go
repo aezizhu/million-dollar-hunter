@@ -48,6 +48,8 @@ func NewPostgres(url string, poolCfg PoolConfig) (*Repo, error) {
 		return nil, err
 	}
 	return &Repo{db: pool}, nil
+
+}
 type OwnershipCheckResult struct {
 	Owned bool
 }
@@ -72,7 +74,6 @@ func (r *Repo) UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string
 	return owned, nil
 }
 
-}
 
 func (r *Repo) Close(ctx context.Context) {
 	r.db.Close()
