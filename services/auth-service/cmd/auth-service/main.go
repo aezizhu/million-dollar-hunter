@@ -48,8 +48,9 @@ func main() {
 		if mvpPass == "" {
 			log.Fatal().Msg("MVP_PASSWORD is required in MVP mode")
 		}
-		if !strings.HasPrefix(mvpPass, "$2a$") && !strings.HasPrefix(mvpPass, "$2b$") {
-			log.Warn().Msg("MVP_PASSWORD does not appear to be a bcrypt hash")
+		if len(mvpPass) != 60 || (!strings.HasPrefix(mvpPass, "$2a$") && !strings.HasPrefix(mvpPass, "$2b$") && !strings.HasPrefix(mvpPass, "$2y$")) {
+			log.Warn().Int("length", len(mvpPass)).
+				Msg("MVP_PASSWORD may not be a valid bcrypt hash (expected 60 chars starting with $2a/$2b/$2y)")
 		}
 		log.Info().Msg("Running in MVP mode")
 	} else {
