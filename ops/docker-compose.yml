@@ -30,6 +30,43 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  ingestion-postgres:
+    image: postgres:16-alpine
+    ports: ["5434:5432"]
+    environment:
+      POSTGRES_USER: ingestion
+      POSTGRES_PASSWORD: ingestion
+      POSTGRES_DB: ingestion
+    volumes:
+      - ingestion_pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  ingestion-service:
+    build:
+      context: ../
+      dockerfile: ingestion-service/Dockerfile
+    restart: on-failure
+    environment:
+      DATABASE_URL: "postgres://ingestion:ingestion@ingestion-postgres:5432/ingestion?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      KAFKA_BROKERS: "kafka:29092"
+      KAFKA_TOPIC_TX_INGESTED: "TransactionDataIngested"
+      HTTP_PORT: "8090"
+      ALCHEMY_BASE_URL: "${ALCHEMY_BASE_URL}"
+      ALCHEMY_API_KEY: "${ALCHEMY_API_KEY}"
+      MORALIS_BASE_URL: "${MORALIS_BASE_URL}"
+      MORALIS_API_KEY: "${MORALIS_API_KEY}"
+      USE_API_MOCKS: "false"
+    depends_on:
+      - kafka
+      - ingestion-postgres
+      - redis
+    ports:
+      - "8090:8090"
+
   portfolio-service:
     build:
       context: ../
@@ -46,6 +83,7 @@ services:
     depends_on:
       - kafka
       - postgres
+      - ingestion-service
     ports:
       - "8081:8081"
     volumes:
@@ -53,4 +91,5 @@ services:
 
 volumes:
   pgdata:
+  ingestion_pgdata:
   exports:

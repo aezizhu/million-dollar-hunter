@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/alchemy"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/breaker"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/config"
+	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/kafka"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/models"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/moralis"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/ratelimit"
@@ -17,13 +19,14 @@ import (
 )
 
 type Service struct {
-	cfg     *config.Config
-	logger  zerolog.Logger
-	db      *repository.Postgres
-	alc     *alchemy.Client
-	mor     *moralis.Client
-	sol     *solana.Client
-	jobch   chan models.IngestionJob
+	cfg      *config.Config
+	logger   zerolog.Logger
+	db       *repository.Postgres
+	alc      *alchemy.Client
+	mor      *moralis.Client
+	sol      *solana.Client
+	jobch    chan models.IngestionJob
+	producer *kafka.Producer
 }
 
 func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *repository.Postgres) (*Service, error) {
@@ -37,14 +40,28 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 	alc := alchemy.New(cfg.AlchemyBaseURL, cfg.AlchemyAPIKey, alcBr, alcRl)
 	mor := moralis.New(cfg.MoralisBaseURL, cfg.MoralisAPIKey, morBr, morRl)
 	sol := solana.New(cfg.MoralisBaseURL, cfg.MoralisAPIKey, solBr, solRl)
+
+	var producer *kafka.Producer
+	if cfg.KafkaEnabled {
+		brokers := strings.Split(cfg.KafkaBrokers, ",")
+		p, err := kafka.NewProducer(brokers, cfg.KafkaTopicTxIngested, logger)
+		if err != nil {
+			logger.Warn().Err(err).Msg("kafka producer init failed, continuing without kafka")
+		} else {
+			producer = p
+			logger.Info().Strs("brokers", brokers).Str("topic", cfg.KafkaTopicTxIngested).Msg("kafka producer initialized")
+		}
+	}
+
 	return &Service{
-		cfg:    cfg,
-		logger: logger,
-		db:     db,
-		alc:    alc,
-		mor:    mor,
-		sol:    sol,
-		jobch:  make(chan models.IngestionJob, 64),
+		cfg:      cfg,
+		logger:   logger,
+		db:       db,
+		alc:      alc,
+		mor:      mor,
+		sol:      sol,
+		jobch:    make(chan models.IngestionJob, 64),
+		producer: producer,
 	}, nil
 }
 
@@ -77,6 +94,10 @@ func (s *Service) handleJob(ctx context.Context, job models.IngestionJob) error 
 		return s.handleSolanaJob(ctx, job)
 	}
 
+	var txCount int
+	var hadError bool
+	var dataSource string
+
 	transfers, err := s.alc.GetAssetTransfersAll(ctx, struct {
 		FromBlock    string   `json:"fromBlock,omitempty"`
 		ToBlock      string   `json:"toBlock,omitempty"`
@@ -94,11 +115,16 @@ func (s *Service) handleJob(ctx context.Context, job models.IngestionJob) error 
 	})
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Str("chain", job.Chain).Msg("alchemy transfers failed")
+		hadError = true
+	} else {
+		txCount = len(transfers)
+		dataSource = "alchemy"
 	}
 
 	if len(transfers) > 0 {
 		if err := s.storeRaw(ctx, "alchemy", job.Wallet, job.Chain, transfers); err != nil {
 			s.logger.Error().Err(err).Msg("store transfers")
+			hadError = true
 		}
 	}
 
@@ -106,6 +132,30 @@ func (s *Service) handleJob(ctx context.Context, job models.IngestionJob) error 
 	if err == nil {
 		if err := s.storeRaw(ctx, "moralis", job.Wallet, job.Chain, bal); err != nil {
 			s.logger.Error().Err(err).Msg("store balances")
+			hadError = true
+		}
+		if dataSource == "" {
+			dataSource = "moralis"
+		}
+	}
+
+	if s.producer != nil {
+		status := "completed"
+		if hadError {
+			status = "partial"
+		}
+		if txCount == 0 && hadError {
+			status = "failed"
+		}
+		event := kafka.TransactionDataIngestedEvent{
+			WalletAddress:    job.Wallet,
+			Chain:            job.Chain,
+			DataSource:       dataSource,
+			TransactionCount: txCount,
+			Status:           status,
+		}
+		if err := s.producer.PublishTransactionDataIngested(ctx, event); err != nil {
+			s.logger.Error().Err(err).Msg("publish kafka event")
 		}
 	}
 
@@ -113,28 +163,37 @@ func (s *Service) handleJob(ctx context.Context, job models.IngestionJob) error 
 }
 
 func (s *Service) handleSolanaJob(ctx context.Context, job models.IngestionJob) error {
+	var txCount int
+	var hadError bool
+
 	txs, err := s.sol.GetTransactions(ctx, solana.GetTransactionsParams{
 		Address: job.Wallet,
 		Limit:   1000,
 	})
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("solana transactions failed")
+		hadError = true
+	} else {
+		txCount = len(txs)
 	}
 
 	if len(txs) > 0 {
 		if err := s.storeRaw(ctx, "solana", job.Wallet, job.Chain, txs); err != nil {
 			s.logger.Error().Err(err).Msg("store solana transactions")
+			hadError = true
 		}
 	}
 
 	balances, err := s.sol.GetTokenBalances(ctx, job.Wallet)
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("solana balances failed")
+		hadError = true
 	}
 
 	if len(balances) > 0 {
 		if err := s.storeRaw(ctx, "solana_balances", job.Wallet, job.Chain, balances); err != nil {
 			s.logger.Error().Err(err).Msg("store solana balances")
+			hadError = true
 		}
 	}
 
@@ -142,6 +201,27 @@ func (s *Service) handleSolanaJob(ctx context.Context, job models.IngestionJob) 
 	if err == nil {
 		if err := s.storeRaw(ctx, "moralis", job.Wallet, job.Chain, bal); err != nil {
 			s.logger.Error().Err(err).Msg("store moralis balances")
+			hadError = true
+		}
+	}
+
+	if s.producer != nil {
+		status := "completed"
+		if hadError {
+			status = "partial"
+		}
+		if txCount == 0 && hadError {
+			status = "failed"
+		}
+		event := kafka.TransactionDataIngestedEvent{
+			WalletAddress:    job.Wallet,
+			Chain:            job.Chain,
+			DataSource:       "solana",
+			TransactionCount: txCount,
+			Status:           status,
+		}
+		if err := s.producer.PublishTransactionDataIngested(ctx, event); err != nil {
+			s.logger.Error().Err(err).Msg("publish kafka event")
 		}
 	}
 
