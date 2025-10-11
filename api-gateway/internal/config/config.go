@@ -12,6 +12,8 @@ type Config struct {
 	AdminUser               string
 	AdminPass               string
 	AuthServiceURL          string
+	PortfolioServiceURL     string
+	MarketDataServiceURL    string
 	JWTSecret               string
 	FrontendURL             string
 	OTLPEndpoint            string
@@ -59,6 +61,8 @@ func Load() Config {
 		AdminUser:               getenv("ADMIN_USER", ""),
 		AdminPass:               getenv("ADMIN_PASS", ""),
 		AuthServiceURL:          os.Getenv("AUTH_SERVICE_URL"),
+		PortfolioServiceURL:     os.Getenv("PORTFOLIO_SERVICE_URL"),
+		MarketDataServiceURL:    os.Getenv("MARKET_DATA_SERVICE_URL"),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		FrontendURL:             getenv("FRONTEND_URL", "*"),
 		OTLPEndpoint:            os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
