@@ -17,6 +17,7 @@ type Config struct {
 	ExportDir             string        `env:"EXPORT_DIR,notEmpty" envDefault:"/data/exports"`
 	ExportCleanupTTL      time.Duration `env:"EXPORT_CLEANUP_TTL" envDefault:"1h"`
 	ExportCleanupInterval time.Duration `env:"EXPORT_CLEANUP_INTERVAL" envDefault:"15m"`
+	MarketDataServiceAddr string        `env:"MARKET_DATA_SERVICE_ADDR,notEmpty" envDefault:"localhost:50051"`
 	// Logging configuration - reserved for future structured logging implementation
 	LogLevel              string        `env:"LOG_LEVEL" envDefault:"info"`
 	LogFormat             string        `env:"LOG_FORMAT" envDefault:"json"`

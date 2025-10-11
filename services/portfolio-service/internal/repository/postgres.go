@@ -507,3 +507,53 @@ func (r *Repo) GetTransactionHistory(ctx context.Context, walletID, address stri
 		TotalCount:   totalCount,
 	}, rows.Err()
 }
+
+type MarketDataClient interface {
+	GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error)
+	GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error)
+}
+
+func (r *Repo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *Portfolio, marketDataClient interface {
+	GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error)
+	GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error)
+}) error {
+	if len(portfolio.Assets) == 0 {
+		return nil
+	}
+
+	var walletChain string
+	err := r.db.QueryRow(ctx, `
+		SELECT chain FROM wallets WHERE id = $1 OR address = $1 LIMIT 1
+	`, portfolio.WalletID).Scan(&walletChain)
+	if err != nil {
+		return fmt.Errorf("failed to get wallet chain: %w", err)
+	}
+
+	tokenMap := make(map[string][]string)
+	tokenMap[walletChain] = make([]string, 0, len(portfolio.Assets))
+	for _, asset := range portfolio.Assets {
+		if asset.TokenAddress != "" {
+			tokenMap[walletChain] = append(tokenMap[walletChain], asset.TokenAddress)
+		}
+	}
+
+	prices, err := marketDataClient.GetTokenPrices(ctx, tokenMap)
+	if err != nil {
+		return fmt.Errorf("failed to get token prices: %w", err)
+	}
+
+	portfolio.TotalUSDValue = 0
+	for i := range portfolio.Assets {
+		asset := &portfolio.Assets[i]
+		if chainPrices, ok := prices[walletChain]; ok {
+			if price, ok := chainPrices[asset.TokenAddress]; ok {
+				balanceFloat := 0.0
+				fmt.Sscanf(asset.CurrentBalance, "%f", &balanceFloat)
+				asset.USDValue = balanceFloat * price
+				portfolio.TotalUSDValue += asset.USDValue
+			}
+		}
+	}
+
+	return nil
+}

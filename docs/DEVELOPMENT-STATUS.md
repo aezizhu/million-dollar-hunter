@@ -1,8 +1,8 @@
 # Development Status - Million Dollar Hunter
 
 **Last Updated**: 2025-10-11  
-**Updated By**: Devin (Phase 1 Implementation Session - Agents A, B, C)  
-**Current Phase**: Phase 1 - Foundational Backend (In Progress - 80% Complete)
+**Updated By**: Devin (Agent C + E Integration - Portfolio Price Enrichment)  
+**Current Phase**: Phase 1 - Foundational Backend (In Progress - 90% Complete)
 
 ---
 
@@ -78,7 +78,7 @@
 - [x] Set up observability stack (Prometheus, OpenTelemetry)
 - [ ] Contract tests against openapi.yaml
 
-**Agent C (Portfolio)**: 85% Complete
+**Agent C (Portfolio)**: 95% Complete
 - [x] Define portfolio.proto gRPC interface (5 RPC methods)
 - [x] Scaffold portfolio-service with repository pattern
 - [x] Implement GetPortfolio RPC
@@ -89,18 +89,22 @@
 - [x] Kafka consumer for TransactionDataIngested events
 - [x] Define event schemas
 - [x] Wire up gRPC server in cmd/server/main.go
+- [x] Integrate market-data-service gRPC client for price enrichment
+- [x] Implement EnrichPortfolioWithPrices method
 - [ ] Write unit tests for service/repository layers
-- [ ] Integrate market-data-service for price enrichment (blocked by Agent E)
 
 **Agent D (Ingestion)**: Not Started
 - [ ] Build ingestion-service
 - [ ] Integrate Alchemy API
 - [ ] Integrate Moralis API
 
-**Agent E (Market Data)**: Not Started
-- [ ] Build market-data-service
-- [ ] Integrate CoinGecko API
-- [ ] Set up Redis caching
+**Agent E (Market Data)**: 100% Complete
+- [x] Build market-data-service with complete gRPC interface
+- [x] Integrate CoinGecko API with rate limiting
+- [x] Set up Redis caching (60s TTL)
+- [x] Implement GetTokenPrice and GetTokenPrices RPCs
+- [x] Add background price refresh workers
+- [x] Service builds successfully and ready for integration
 
 **Agent F (Frontend)**: Not Started
 - [ ] Initialize Next.js project
@@ -241,6 +245,28 @@
 ---
 
 ## Recent Changes
+
+### 2025-10-11 (Agent C + E Integration - Portfolio Price Enrichment)
+**Completed by**: Devin
+
+**Agent C (portfolio-service) + Agent E (market-data-service) Integration**:
+- Created portfolio.proto source file with complete gRPC service definition
+- Implemented market-data-service gRPC client in portfolio-service (internal/client/market_data.go)
+- Added MARKET_DATA_SERVICE_ADDR configuration to portfolio-service
+- Updated service layer to inject market data client dependency
+- Implemented EnrichPortfolioWithPrices() method in repository layer
+- Updated GetPortfolio and GetWalletDetails RPCs to enrich assets with USD prices from market-data-service
+- Added go.work entry for market-data-service to support local development
+- All builds passing successfully for both services
+
+**Technical Implementation**:
+- Portfolio service now calls market-data-service via gRPC to fetch token prices
+- Price enrichment happens dynamically when portfolio data is requested
+- Batch price fetching optimized with GetTokenPrices RPC (multiple tokens in single call)
+- USD values calculated: balance × current_price from market-data-service
+- Total portfolio value aggregated from all enriched assets
+
+**Status**: Portfolio service can now display USD values for all wallet assets using real-time pricing from market-data-service. End-to-end integration complete.
 
 ### 2025-10-11 (Phase 1 Implementation - Agents A, B, C)
 **Completed by**: Devin

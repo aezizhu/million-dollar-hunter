@@ -30,16 +30,30 @@ type Repository interface {
 	GetPortfolioByWalletID(ctx context.Context, walletID string) (*repository.Portfolio, error)
 	UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string) (bool, error)
 	UpsertFromIngest(ctx context.Context, payload []byte) error
+	EnrichPortfolioWithPrices(ctx context.Context, portfolio *repository.Portfolio, marketDataClient interface {
+		GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error)
+		GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error)
+	}) error
 	Close(ctx context.Context)
 }
 
-type PortfolioService struct {
-	repo Repository
-	cfg  config.Config
+type MarketDataClient interface {
+	GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error)
+	GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error)
 }
 
-func New(repo Repository, cfg config.Config) *PortfolioService {
-	return &PortfolioService{repo: repo, cfg: cfg}
+type PortfolioService struct {
+	repo             Repository
+	cfg              config.Config
+	marketDataClient MarketDataClient
+}
+
+func New(repo Repository, cfg config.Config, marketDataClient MarketDataClient) *PortfolioService {
+	return &PortfolioService{
+		repo:             repo,
+		cfg:              cfg,
+		marketDataClient: marketDataClient,
+	}
 }
 
 func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, raw []byte) error {
@@ -54,6 +68,10 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, req *pb.GetPortfoli
 	portfolio, err := s.repo.GetPortfolioByWalletID(ctx, req.GetWalletId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "fetch portfolio: %v", err)
+	}
+
+	if err := s.repo.EnrichPortfolioWithPrices(ctx, portfolio, s.marketDataClient); err != nil {
+		return nil, status.Errorf(codes.Internal, "enrich portfolio with prices: %v", err)
 	}
 
 	assets := make([]*pb.Asset, 0, len(portfolio.Assets))
@@ -240,8 +258,17 @@ func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWall
 		return nil, status.Errorf(codes.Internal, "fetch wallet details: %v", err)
 	}
 
-	assets := make([]*pb.Asset, 0, len(details.Assets))
-	for _, a := range details.Assets {
+	portfolio := &repository.Portfolio{
+		WalletID:      details.WalletID,
+		Assets:        details.Assets,
+		TotalUSDValue: details.TotalUSDValue,
+	}
+	if err := s.repo.EnrichPortfolioWithPrices(ctx, portfolio, s.marketDataClient); err != nil {
+		return nil, status.Errorf(codes.Internal, "enrich wallet with prices: %v", err)
+	}
+
+	assets := make([]*pb.Asset, 0, len(portfolio.Assets))
+	for _, a := range portfolio.Assets {
 		assets = append(assets, &pb.Asset{
 			TokenAddress: a.TokenAddress,
 			Symbol:       a.Symbol,
@@ -256,7 +283,7 @@ func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWall
 		Address:       details.Address,
 		Chain:         details.Chain,
 		Assets:        assets,
-		TotalUsdValue: details.TotalUSDValue,
+		TotalUsdValue: portfolio.TotalUSDValue,
 	}, nil
 }
 

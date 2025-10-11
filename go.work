@@ -3,5 +3,9 @@ go 1.24.0
 toolchain go1.23.4
 
 use ./api-gateway
+
 use ./services/auth-service
+
 use ./services/portfolio-service
+
+use ./services/market-data-service
