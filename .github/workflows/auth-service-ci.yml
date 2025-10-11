@@ -67,6 +67,8 @@ jobs:
 
     - name: Generate coverage report
       working-directory: services/auth-service
+      env:
+        GOWORK: "off"
       run: go tool cover -func=coverage.out
 
     - name: Upload coverage
