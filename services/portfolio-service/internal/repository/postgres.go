@@ -12,8 +12,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type PgxPool interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Close()
+}
+
 type Repo struct {
-	db *pgxpool.Pool
+	db PgxPool
 }
 
 type PoolConfig struct {

@@ -20,12 +20,21 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type Repository interface {
+	GetPortfolioSummary(ctx context.Context, userID string) ([]repository.WalletSummary, float64, error)
+	GetWalletDetails(ctx context.Context, walletID, address string) (*repository.WalletDetails, error)
+	GetTransactionHistory(ctx context.Context, walletID, address string, page, limit int32, filterByType string) (*repository.TransactionResult, error)
+	GetPortfolioByWalletID(ctx context.Context, walletID string) (*repository.Portfolio, error)
+	UpsertFromIngest(ctx context.Context, payload []byte) error
+	Close(ctx context.Context)
+}
+
 type PortfolioService struct {
-	repo *repository.Repo
+	repo Repository
 	cfg  config.Config
 }
 
-func New(repo *repository.Repo, cfg config.Config) *PortfolioService {
+func New(repo Repository, cfg config.Config) *PortfolioService {
 	return &PortfolioService{repo: repo, cfg: cfg}
 }
 

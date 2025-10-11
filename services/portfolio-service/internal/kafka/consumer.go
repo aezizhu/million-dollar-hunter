@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -67,20 +68,27 @@ func (h *groupHandler) Setup(sarama.ConsumerGroupSession) error   { return nil }
 func (h *groupHandler) Cleanup(sarama.ConsumerGroupSession) error { return nil }
 func (h *groupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
-		err := h.svc.HandleTransactionDataIngested(sess.Context(), msg.Value)
+		ctx := enrichContextWithMessageMetadata(sess.Context(), msg)
+		
+		err := h.svc.HandleTransactionDataIngested(ctx, msg.Value)
 		if err != nil {
-			log.Printf("handle message err: %v, topic=%s partition=%d offset=%d",
-				err, msg.Topic, msg.Partition, msg.Offset)
-
+			errorContext := fmt.Sprintf("topic=%s partition=%d offset=%d timestamp=%v headers=%v",
+				msg.Topic, msg.Partition, msg.Offset, msg.Timestamp, formatHeaders(msg.Headers))
+			
 			if isPermanentError(err) {
-				log.Printf("permanent error, skipping message: topic=%s partition=%d offset=%d",
-					msg.Topic, msg.Partition, msg.Offset)
+				log.Printf("PERMANENT_ERROR: Skipping malformed message: %v | %s", err, errorContext)
 				sess.MarkMessage(msg, "")
+			} else if isTransientError(err) {
+				log.Printf("TRANSIENT_ERROR: Retryable error encountered: %v | %s | Rebalancing consumer group", err, errorContext)
+				return fmt.Errorf("transient error, triggering rebalance: %w", err)
 			} else {
-				return err
+				log.Printf("UNKNOWN_ERROR: Unexpected error: %v | %s | Rebalancing consumer group", err, errorContext)
+				return fmt.Errorf("unknown error, triggering rebalance: %w", err)
 			}
 		} else {
 			sess.MarkMessage(msg, "")
+			log.Printf("MESSAGE_PROCESSED: Successfully processed message | topic=%s partition=%d offset=%d",
+				msg.Topic, msg.Partition, msg.Offset)
 		}
 	}
 	return nil
@@ -90,8 +98,52 @@ func isPermanentError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errMsg := err.Error()
+	errMsg := strings.ToLower(err.Error())
 	return strings.Contains(errMsg, "unmarshal") ||
 		strings.Contains(errMsg, "invalid") ||
-		strings.Contains(errMsg, "malformed")
+		strings.Contains(errMsg, "malformed") ||
+		strings.Contains(errMsg, "empty payload") ||
+		strings.Contains(errMsg, "bad request") ||
+		strings.Contains(errMsg, "validation failed")
+}
+
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "connection") ||
+		strings.Contains(errMsg, "timeout") ||
+		strings.Contains(errMsg, "temporary") ||
+		strings.Contains(errMsg, "unavailable") ||
+		strings.Contains(errMsg, "deadline exceeded") ||
+		strings.Contains(errMsg, "context deadline")
+}
+
+type contextKey string
+
+const (
+	kafkaTopicKey     contextKey = "kafka.topic"
+	kafkaPartitionKey contextKey = "kafka.partition"
+	kafkaOffsetKey    contextKey = "kafka.offset"
+	kafkaTimestampKey contextKey = "kafka.timestamp"
+)
+
+func enrichContextWithMessageMetadata(ctx context.Context, msg *sarama.ConsumerMessage) context.Context {
+	ctx = context.WithValue(ctx, kafkaTopicKey, msg.Topic)
+	ctx = context.WithValue(ctx, kafkaPartitionKey, msg.Partition)
+	ctx = context.WithValue(ctx, kafkaOffsetKey, msg.Offset)
+	ctx = context.WithValue(ctx, kafkaTimestampKey, msg.Timestamp)
+	return ctx
+}
+
+func formatHeaders(headers []*sarama.RecordHeader) string {
+	if len(headers) == 0 {
+		return "none"
+	}
+	var parts []string
+	for _, h := range headers {
+		parts = append(parts, fmt.Sprintf("%s=%s", string(h.Key), string(h.Value)))
+	}
+	return strings.Join(parts, ", ")
 }

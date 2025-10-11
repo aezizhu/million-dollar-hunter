@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/cleanup"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/kafka"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
@@ -69,7 +70,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("kafka consumer: %v", err)
 	}
+	
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	
 	go consumer.Run()
+
+	exportCleanup := cleanup.NewExportCleanup(cfg.ExportDir, cfg.ExportCleanupTTL, cfg.ExportCleanupInterval)
+	go exportCleanup.Start(ctx)
 
 	lis, err := net.Listen("tcp", cfg.GRPCAddr)
 	if err != nil {
@@ -88,6 +96,10 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
+	
+	log.Printf("Shutting down gracefully...")
+	cancel()
 	grpcServer.GracefulStop()
 	consumer.Stop()
+	log.Printf("Shutdown complete")
 }
