@@ -1,23 +1,11 @@
 package middleware
 
 import (
-	"bytes"
-	"io"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 )
-
-type responseWriter struct {
-	gin.ResponseWriter
-	body *bytes.Buffer
-}
-
-func (w *responseWriter) Write(b []byte) (int, error) {
-	w.body.Write(b)
-	return w.ResponseWriter.Write(b)
-}
 
 func Logging(logger zerolog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -25,22 +13,11 @@ func Logging(logger zerolog.Logger) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
 
-		traceID, _ := c.Get("request_id")
-		if traceID == nil {
-			traceID = ""
+	traceIDVal, _ := c.Get("request_id")
+		traceID := ""
+		if tid, ok := traceIDVal.(string); ok {
+			traceID = tid
 		}
-
-		var requestBody []byte
-		if c.Request.Body != nil {
-			requestBody, _ = io.ReadAll(c.Request.Body)
-			c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBody))
-		}
-
-		blw := &responseWriter{
-			ResponseWriter: c.Writer,
-			body:           bytes.NewBufferString(""),
-		}
-		c.Writer = blw
 
 		c.Next()
 
@@ -60,7 +37,7 @@ func Logging(logger zerolog.Logger) gin.HandlerFunc {
 		}
 
 		event.
-			Str("trace_id", traceID.(string)).
+			Str("trace_id", traceID).
 			Str("method", method).
 			Str("path", path).
 			Int("status", status).
@@ -72,7 +49,7 @@ func Logging(logger zerolog.Logger) gin.HandlerFunc {
 		if len(c.Errors) > 0 {
 			for _, e := range c.Errors {
 				logger.Error().
-					Str("trace_id", traceID.(string)).
+					Str("trace_id", traceID).
 					Str("path", path).
 					Err(e.Err).
 					Msg("Request error")

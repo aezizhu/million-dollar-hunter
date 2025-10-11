@@ -164,11 +164,18 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 	}
 
 	rows, err := r.db.Query(ctx, `
-		SELECT token_address, symbol, name, current_balance, COALESCE(usd_value, 0) as usd_value
+		SELECT DISTINCT ON (a.id)
+			a.token_address, a.symbol, a.name, a.current_balance, 
+			COALESCE(s.usd_value, 0) as usd_value
 		FROM assets a
-		LEFT JOIN asset_snapshots s ON a.id = s.asset_id
+		LEFT JOIN LATERAL (
+			SELECT usd_value FROM asset_snapshots 
+			WHERE asset_id = a.id 
+			ORDER BY ts DESC 
+			LIMIT 1
+		) s ON true
 		WHERE a.wallet_id = (SELECT id FROM wallets WHERE id = $1 OR address = $1 LIMIT 1)
-		ORDER BY current_balance DESC
+		ORDER BY a.id, CAST(a.current_balance AS NUMERIC) DESC
 	`, walletID)
 	if err != nil {
 		return nil, fmt.Errorf("query assets: %w", err)
@@ -204,14 +211,20 @@ func (r *Repo) GetPortfolioSummary(ctx context.Context, userID string) ([]Wallet
 			w.id,
 			w.address,
 			w.chain,
-			COUNT(a.id) as asset_count,
-			COALESCE(SUM(s.usd_value), 0) as total_usd_value
+			COUNT(DISTINCT a.id) as asset_count,
+			COALESCE(SUM(DISTINCT s.usd_value), 0) as total_usd_value
 		FROM wallets w
 		LEFT JOIN assets a ON w.id = a.wallet_id
-		LEFT JOIN asset_snapshots s ON a.id = s.asset_id
+		LEFT JOIN LATERAL (
+			SELECT usd_value FROM asset_snapshots 
+			WHERE asset_id = a.id 
+			ORDER BY ts DESC 
+			LIMIT 1
+		) s ON true
+		WHERE w.user_id = $1
 		GROUP BY w.id, w.address, w.chain
 		ORDER BY total_usd_value DESC
-	`)
+	`, userID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("query wallets: %w", err)
 	}
@@ -270,11 +283,18 @@ func (r *Repo) GetWalletDetails(ctx context.Context, walletID, address string) (
 	details.WalletID = walletUUID
 
 	rows, err := r.db.Query(ctx, `
-		SELECT token_address, symbol, name, current_balance, COALESCE(s.usd_value, 0) as usd_value
+		SELECT DISTINCT ON (a.id)
+			a.token_address, a.symbol, a.name, a.current_balance, 
+			COALESCE(s.usd_value, 0) as usd_value
 		FROM assets a
-		LEFT JOIN asset_snapshots s ON a.id = s.asset_id
+		LEFT JOIN LATERAL (
+			SELECT usd_value FROM asset_snapshots 
+			WHERE asset_id = a.id 
+			ORDER BY ts DESC 
+			LIMIT 1
+		) s ON true
 		WHERE a.wallet_id = $1
-		ORDER BY current_balance DESC
+		ORDER BY a.id, CAST(a.current_balance AS NUMERIC) DESC
 	`, walletUUID)
 	if err != nil {
 		return nil, fmt.Errorf("query assets: %w", err)
@@ -327,6 +347,10 @@ func (r *Repo) GetTransactionHistory(ctx context.Context, walletID, address stri
 	argPos := 2
 
 	if filterByType != "" {
+		validTypes := map[string]bool{"send": true, "receive": true, "swap": true, "approve": true, "mint": true, "burn": true}
+		if !validTypes[filterByType] {
+			return nil, fmt.Errorf("invalid filter_by_type: must be one of send, receive, swap, approve, mint, burn")
+		}
 		typeFilter = fmt.Sprintf(" AND t.type = $%d", argPos)
 		args = append(args, filterByType)
 		argPos++

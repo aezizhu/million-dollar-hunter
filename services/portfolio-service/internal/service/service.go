@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
-	"time"
 
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
@@ -66,14 +68,18 @@ func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*
 
 	portfolio, err := s.repo.GetPortfolioByWalletID(ctx, req.GetWalletId())
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "wallet not found: %v", err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, status.Error(codes.NotFound, "wallet not found")
+		}
+		return nil, status.Errorf(codes.Internal, "fetch portfolio: %v", err)
 	}
 
 	if err := os.MkdirAll(s.cfg.ExportDir, 0o755); err != nil {
 		return nil, status.Errorf(codes.Internal, "create export dir: %v", err)
 	}
 
-	filename := fmt.Sprintf("portfolio_%s_%d", req.GetWalletId(), time.Now().Unix())
+	exportID := uuid.New().String()
+	filename := fmt.Sprintf("portfolio_%s_%s", req.GetWalletId(), exportID)
 	var data []byte
 
 	if req.GetFormat() == pb.ExportFormat_EXPORT_FORMAT_JSON {
@@ -153,7 +159,10 @@ func (s *PortfolioService) GetPortfolioSummary(ctx context.Context, req *pb.GetP
 func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWalletDetailsRequest) (*pb.GetWalletDetailsResponse, error) {
 	details, err := s.repo.GetWalletDetails(ctx, req.GetWalletId(), req.GetAddress())
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "fetch wallet details: %v", err)
+		if errors.Is(err, pgx.ErrNoRows) || err.Error() == "wallet not found" {
+			return nil, status.Error(codes.NotFound, "wallet not found")
+		}
+		return nil, status.Errorf(codes.Internal, "fetch wallet details: %v", err)
 	}
 
 	assets := make([]*pb.Asset, 0, len(details.Assets))
