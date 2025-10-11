@@ -250,6 +250,7 @@ func TestExport(t *testing.T) {
 	svc := New(mockRepo, cfg)
 
 	t.Run("success JSON export", func(t *testing.T) {
+		userID := "user123"
 		validWalletID := "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
 		portfolio := &repository.Portfolio{
 			WalletID: validWalletID,
@@ -263,6 +264,7 @@ func TestExport(t *testing.T) {
 			Return(portfolio, nil).Once()
 
 		req := &pb.ExportRequest{
+			UserId:   userID,
 			WalletId: validWalletID,
 			Format:   pb.ExportFormat_EXPORT_FORMAT_JSON,
 		}
@@ -270,12 +272,13 @@ func TestExport(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
-		assert.Contains(t, resp.Path, "portfolio_"+validWalletID+"_")
+		assert.Contains(t, resp.Path, "portfolio_"+userID+"_")
 		assert.Contains(t, resp.Path, ".json")
 		mockRepo.AssertExpectations(t)
 	})
 
 	t.Run("success CSV export", func(t *testing.T) {
+		userID := "user123"
 		validWalletID := "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
 		portfolio := &repository.Portfolio{
 			WalletID: validWalletID,
@@ -289,6 +292,7 @@ func TestExport(t *testing.T) {
 			Return(portfolio, nil).Once()
 
 		req := &pb.ExportRequest{
+			UserId:   userID,
 			WalletId: validWalletID,
 			Format:   pb.ExportFormat_EXPORT_FORMAT_CSV,
 		}
@@ -296,17 +300,18 @@ func TestExport(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.NotNil(t, resp)
-		assert.Contains(t, resp.Path, "portfolio_"+validWalletID+"_")
+		assert.Contains(t, resp.Path, "portfolio_"+userID+"_")
 		assert.Contains(t, resp.Path, ".csv")
 		mockRepo.AssertExpectations(t)
 	})
 
 	t.Run("wallet not found", func(t *testing.T) {
+		userID := "user123"
 		validWalletID := "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
 		mockRepo.On("GetPortfolioByWalletID", mock.Anything, validWalletID).
 			Return(nil, pgx.ErrNoRows).Once()
 
-		req := &pb.ExportRequest{WalletId: validWalletID, Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
+		req := &pb.ExportRequest{UserId: userID, WalletId: validWalletID, Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
 		resp, err := svc.Export(context.Background(), req)
 
 		assert.Error(t, err)
@@ -315,8 +320,17 @@ func TestExport(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 
+	t.Run("missing user_id", func(t *testing.T) {
+		req := &pb.ExportRequest{UserId: "", WalletId: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0", Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
+		resp, err := svc.Export(context.Background(), req)
+
+		assert.Error(t, err)
+		assert.Nil(t, resp)
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+
 	t.Run("missing wallet_id", func(t *testing.T) {
-		req := &pb.ExportRequest{WalletId: "", Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
+		req := &pb.ExportRequest{UserId: "user123", WalletId: "", Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
 		resp, err := svc.Export(context.Background(), req)
 
 		assert.Error(t, err)
@@ -325,7 +339,7 @@ func TestExport(t *testing.T) {
 	})
 
 	t.Run("invalid wallet_id format", func(t *testing.T) {
-		req := &pb.ExportRequest{WalletId: "invalid_wallet", Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
+		req := &pb.ExportRequest{UserId: "user123", WalletId: "invalid_wallet", Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
 		resp, err := svc.Export(context.Background(), req)
 
 		assert.Error(t, err)
@@ -334,7 +348,7 @@ func TestExport(t *testing.T) {
 	})
 
 	t.Run("path traversal attempt", func(t *testing.T) {
-		req := &pb.ExportRequest{WalletId: "../../etc/passwd", Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
+		req := &pb.ExportRequest{UserId: "user123", WalletId: "../../etc/passwd", Format: pb.ExportFormat_EXPORT_FORMAT_JSON}
 		resp, err := svc.Export(context.Background(), req)
 
 		assert.Error(t, err)

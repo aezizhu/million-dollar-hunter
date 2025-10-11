@@ -252,8 +252,9 @@ func (x *GetPortfolioResponse) GetTotalUsdValue() float64 {
 
 type ExportRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	WalletId      string                 `protobuf:"bytes,1,opt,name=wallet_id,json=walletId,proto3" json:"wallet_id,omitempty"`
-	Format        ExportFormat           `protobuf:"varint,2,opt,name=format,proto3,enum=portfolio.v1.ExportFormat" json:"format,omitempty"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	WalletId      string                 `protobuf:"bytes,2,opt,name=wallet_id,json=walletId,proto3" json:"wallet_id,omitempty"`
+	Format        ExportFormat           `protobuf:"varint,3,opt,name=format,proto3,enum=portfolio.v1.ExportFormat" json:"format,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -286,6 +287,13 @@ func (x *ExportRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ExportRequest.ProtoReflect.Descriptor instead.
 func (*ExportRequest) Descriptor() ([]byte, []int) {
 	return file_portfolio_v1_portfolio_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ExportRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
 }
 
 func (x *ExportRequest) GetWalletId() string {
@@ -906,10 +914,11 @@ const file_portfolio_v1_portfolio_proto_rawDesc = "" +
 	"\x14GetPortfolioResponse\x12\x1b\n" +
 	"\twallet_id\x18\x01 \x01(\tR\bwalletId\x12+\n" +
 	"\x06assets\x18\x02 \x03(\v2\x13.portfolio.v1.AssetR\x06assets\x12&\n" +
-	"\x0ftotal_usd_value\x18\x03 \x01(\x01R\rtotalUsdValue\"`\n" +
-	"\rExportRequest\x12\x1b\n" +
-	"\twallet_id\x18\x01 \x01(\tR\bwalletId\x122\n" +
-	"\x06format\x18\x02 \x01(\x0e2\x1a.portfolio.v1.ExportFormatR\x06format\"$\n" +
+	"\x0ftotal_usd_value\x18\x03 \x01(\x01R\rtotalUsdValue\"y\n" +
+	"\rExportRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1b\n" +
+	"\twallet_id\x18\x02 \x01(\tR\bwalletId\x122\n" +
+	"\x06format\x18\x03 \x01(\x0e2\x1a.portfolio.v1.ExportFormatR\x06format\"$\n" +
 	"\x0eExportResponse\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\"\x91\x01\n" +
 	"\x06Wallet\x12\x0e\n" +

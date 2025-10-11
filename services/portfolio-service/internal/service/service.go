@@ -73,6 +73,10 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, req *pb.GetPortfoli
 }
 
 func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportResponse, error) {
+	if req.GetUserId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
 	if req.GetWalletId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "wallet_id is required")
 	}
@@ -98,9 +102,10 @@ func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*
 		return nil, status.Errorf(codes.Internal, "create export dir: %v", err)
 	}
 
+	safeUserID := sanitizeForFilename(req.GetUserId())
 	safeWalletID := sanitizeForFilename(req.GetWalletId())
 	exportID := uuid.New().String()
-	filename := fmt.Sprintf("portfolio_%s_%s", safeWalletID, exportID)
+	filename := fmt.Sprintf("portfolio_%s_%s_%s", safeUserID, safeWalletID, exportID)
 	var data []byte
 
 	if req.GetFormat() == pb.ExportFormat_EXPORT_FORMAT_JSON {
