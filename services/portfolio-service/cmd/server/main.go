@@ -27,6 +27,18 @@ func (s *server) GetPortfolio(ctx context.Context, req *pb.GetPortfolioRequest) 
 	return s.svc.GetPortfolio(ctx, req)
 }
 
+func (s *server) GetPortfolioSummary(ctx context.Context, req *pb.GetPortfolioSummaryRequest) (*pb.GetPortfolioSummaryResponse, error) {
+	return s.svc.GetPortfolioSummary(ctx, req)
+}
+
+func (s *server) GetWalletDetails(ctx context.Context, req *pb.GetWalletDetailsRequest) (*pb.GetWalletDetailsResponse, error) {
+	return s.svc.GetWalletDetails(ctx, req)
+}
+
+func (s *server) GetTransactionHistory(ctx context.Context, req *pb.GetTransactionHistoryRequest) (*pb.GetTransactionHistoryResponse, error) {
+	return s.svc.GetTransactionHistory(ctx, req)
+}
+
 func (s *server) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportResponse, error) {
 	return s.svc.Export(ctx, req)
 }

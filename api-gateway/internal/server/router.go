@@ -108,6 +108,8 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		c.Next()
 	})
 
+	r.Use(middleware.Logging(logger))
+
 	limiter := newLimiter(cfg, logger)
 
 	r.GET("/healthz", func(c *gin.Context) {

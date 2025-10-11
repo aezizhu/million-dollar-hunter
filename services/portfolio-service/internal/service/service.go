@@ -126,3 +126,87 @@ func (s *PortfolioService) generateCSV(portfolio *repository.Portfolio) ([]byte,
 
 	return buf.Bytes(), nil
 }
+
+func (s *PortfolioService) GetPortfolioSummary(ctx context.Context, req *pb.GetPortfolioSummaryRequest) (*pb.GetPortfolioSummaryResponse, error) {
+	wallets, totalNetWorth, err := s.repo.GetPortfolioSummary(ctx, req.GetUserId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fetch portfolio summary: %v", err)
+	}
+
+	pbWallets := make([]*pb.Wallet, 0, len(wallets))
+	for _, w := range wallets {
+		pbWallets = append(pbWallets, &pb.Wallet{
+			Id:            w.ID,
+			Address:       w.Address,
+			Chain:         w.Chain,
+			TotalUsdValue: w.TotalUSDValue,
+			AssetCount:    w.AssetCount,
+		})
+	}
+
+	return &pb.GetPortfolioSummaryResponse{
+		Wallets:        pbWallets,
+		TotalNetWorth:  totalNetWorth,
+	}, nil
+}
+
+func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWalletDetailsRequest) (*pb.GetWalletDetailsResponse, error) {
+	details, err := s.repo.GetWalletDetails(ctx, req.GetWalletId(), req.GetAddress())
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "fetch wallet details: %v", err)
+	}
+
+	assets := make([]*pb.Asset, 0, len(details.Assets))
+	for _, a := range details.Assets {
+		assets = append(assets, &pb.Asset{
+			TokenAddress: a.TokenAddress,
+			Symbol:       a.Symbol,
+			Name:         a.Name,
+			Amount:       a.CurrentBalance,
+			UsdValue:     a.USDValue,
+		})
+	}
+
+	return &pb.GetWalletDetailsResponse{
+		WalletId:      details.WalletID,
+		Address:       details.Address,
+		Chain:         details.Chain,
+		Assets:        assets,
+		TotalUsdValue: details.TotalUSDValue,
+	}, nil
+}
+
+func (s *PortfolioService) GetTransactionHistory(ctx context.Context, req *pb.GetTransactionHistoryRequest) (*pb.GetTransactionHistoryResponse, error) {
+	result, err := s.repo.GetTransactionHistory(
+		ctx,
+		req.GetWalletId(),
+		req.GetAddress(),
+		req.GetPage(),
+		req.GetLimit(),
+		req.GetFilterByType(),
+	)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "fetch transaction history: %v", err)
+	}
+
+	transactions := make([]*pb.Transaction, 0, len(result.Transactions))
+	for _, t := range result.Transactions {
+		transactions = append(transactions, &pb.Transaction{
+			Hash:         t.Hash,
+			From:         t.From,
+			To:           t.To,
+			Amount:       t.Amount,
+			Symbol:       t.Symbol,
+			TokenAddress: t.TokenAddress,
+			Timestamp:    t.Timestamp.Unix(),
+			Type:         t.Type,
+		})
+	}
+
+	return &pb.GetTransactionHistoryResponse{
+		Transactions: transactions,
+		TotalCount:   result.TotalCount,
+		Page:         req.GetPage(),
+		Limit:        req.GetLimit(),
+	}, nil
+}
