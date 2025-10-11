@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
@@ -192,5 +193,86 @@ func TestAuth_GRPCMode_FallbackToLocal_MVPGate_Succeeds(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 with fallback to local mvp-gate, got %d", w.Code)
+	}
+}
+func TestAuth_GRPCMode_UserIDPropagation(t *testing.T) {
+	lis, srv := startBufServer(&fakeAuthServer{valid: true})
+	defer srv.Stop()
+
+	conn, err := dialBufConn(lis)
+	if err != nil {
+		t.Fatalf("dial err: %v", err)
+	}
+	defer conn.Close()
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	cfg := config.Config{
+		AuthValidateMode:  "grpc",
+		JWTAudience:       "aud",
+		AuthGRPCTimeoutMs: 200,
+	}
+	r.Use(Auth(cfg, conn))
+	r.GET("/x", func(c *gin.Context) {
+		if v, ok := c.Get("user_id"); ok && v == "u1" {
+			c.Header("X-User-ID", "u1")
+			c.Status(http.StatusOK)
+			return
+		}
+		c.Status(http.StatusUnauthorized)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Authorization", "Bearer token")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if got := w.Header().Get("X-User-ID"); got != "u1" {
+		t.Fatalf("expected user header u1, got %s", got)
+	}
+}
+
+func TestAuth_GRPCMode_FallbackToLocal_JWT_Succeeds(t *testing.T) {
+	lis, srv := startBufServer(&fakeAuthServer{valid: true, delay: 50 * time.Millisecond})
+	defer srv.Stop()
+
+	conn, err := dialBufConn(lis)
+	if err != nil {
+		t.Fatalf("dial err: %v", err)
+	}
+	defer conn.Close()
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	cfg := config.Config{
+		AuthValidateMode:        "grpc",
+		JWTAudience:             "aud",
+		AuthGRPCTimeoutMs:       10,
+		AuthGRPCFallbackToLocal: true,
+		JWTSecret:               "devsecret",
+	}
+	r.Use(Auth(cfg, conn))
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	claims := jwt.MapClaims{
+		"sub": "u-local",
+		"exp": time.Now().Add(5 * time.Minute).Unix(),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenStr, err := tok.SignedString([]byte("devsecret"))
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with fallback local jwt, got %d", w.Code)
 	}
 }

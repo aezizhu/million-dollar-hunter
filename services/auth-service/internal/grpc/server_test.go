@@ -64,3 +64,78 @@ func TestValidateToken_WrongAud(t *testing.T) {
 		t.Fatalf("expected invalid with reason, got: %+v", resp)
 	}
 }
+
+func TestValidateToken_Malformed(t *testing.T) {
+	m := jwtmgr.New("iss", "aud", time.Minute, time.Hour, []byte("key"))
+	s := New(m)
+	resp, err := s.ValidateToken(context.Background(), &gen.ValidateRequest{
+		Token:       "not.a.jwt",
+		ExpectedAud: "aud",
+	})
+	if err != nil {
+		t.Fatalf("ValidateToken error: %v", err)
+	}
+	if resp.GetValid() || resp.GetReason() == "" {
+		t.Fatalf("expected invalid with reason, got: %+v", resp)
+	}
+}
+
+func TestValidateToken_Expired(t *testing.T) {
+	m := jwtmgr.New("iss", "aud", time.Minute, time.Hour, []byte("key"))
+	s := New(m)
+	access, _, err := m.GenerateToken("u123", "e@example.com", -1*time.Minute)
+	if err != nil {
+		t.Fatalf("GenerateToken error: %v", err)
+	}
+	resp, err := s.ValidateToken(context.Background(), &gen.ValidateRequest{
+		Token:       access,
+		ExpectedAud: "aud",
+	})
+	if err != nil {
+		t.Fatalf("ValidateToken error: %v", err)
+	}
+	if resp.GetValid() || resp.GetReason() == "" {
+		t.Fatalf("expected invalid expired, got: %+v", resp)
+	}
+}
+
+func TestValidateToken_WrongIssuer(t *testing.T) {
+	m := jwtmgr.New("iss", "aud", time.Minute, time.Hour, []byte("key"))
+	s := New(m)
+	other := jwtmgr.New("other-iss", "aud", time.Minute, time.Hour, []byte("key"))
+	access, _, err := other.GenerateToken("u123", "e@example.com", time.Minute)
+	if err != nil {
+		t.Fatalf("GenerateToken error: %v", err)
+	}
+	resp, err := s.ValidateToken(context.Background(), &gen.ValidateRequest{
+		Token:       access,
+		ExpectedAud: "aud",
+	})
+	if err != nil {
+		t.Fatalf("ValidateToken error: %v", err)
+	}
+	if resp.GetValid() || resp.GetReason() == "" {
+		t.Fatalf("expected invalid wrong issuer, got: %+v", resp)
+	}
+}
+
+func TestValidateToken_CancelledContext(t *testing.T) {
+	m := jwtmgr.New("iss", "aud", time.Minute, time.Hour, []byte("key"))
+	s := New(m)
+	access, _, err := m.GenerateToken("u123", "e@example.com", time.Minute)
+	if err != nil {
+		t.Fatalf("GenerateToken error: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	resp, err := s.ValidateToken(ctx, &gen.ValidateRequest{
+		Token:       access,
+		ExpectedAud: "aud",
+	})
+	if err != nil {
+		t.Fatalf("unexpected grpc error: %v", err)
+	}
+	if resp.GetValid() {
+		t.Fatalf("expected invalid with cancelled context")
+	}
+}

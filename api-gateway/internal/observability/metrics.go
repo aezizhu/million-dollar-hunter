@@ -7,11 +7,11 @@ import (
 )
 
 type HTTPMetrics struct {
-	RequestsTotal       *prometheus.CounterVec
-	RequestsDuration    *prometheus.HistogramVec
-	InFlight            prometheus.Gauge
-	RateLimitAllowed    *prometheus.CounterVec
-	RateLimitBlocked    *prometheus.CounterVec
+	RequestsTotal    *prometheus.CounterVec
+	RequestsDuration *prometheus.HistogramVec
+	InFlight         prometheus.Gauge
+	RateLimitAllowed *prometheus.CounterVec
+	RateLimitBlocked *prometheus.CounterVec
 }
 
 func InitMetricsRegistry(cfg interface{}) *prometheus.Registry {
@@ -59,4 +59,33 @@ func Observe(m *HTTPMetrics, method, route, status string, start time.Time) {
 	m.InFlight.Dec()
 	m.RequestsTotal.WithLabelValues(method, route, status).Inc()
 	m.RequestsDuration.WithLabelValues(method, route, status).Observe(time.Since(start).Seconds())
+}
+
+type AuthGRPCMetrics struct {
+	total   *prometheus.CounterVec
+	latency prometheus.Observer
+}
+
+func NewAuthGRPCMetrics(reg *prometheus.Registry, namespace string) *AuthGRPCMetrics {
+	total := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "auth_grpc_validation_total",
+		Help:      "Total number of gRPC auth validations by outcome",
+	}, []string{"outcome"})
+	latency := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Namespace: namespace,
+		Name:      "auth_grpc_validation_duration_seconds",
+		Help:      "Duration of gRPC auth validation calls",
+		Buckets:   prometheus.DefBuckets,
+	})
+	reg.MustRegister(total, latency)
+	return &AuthGRPCMetrics{total: total, latency: latency}
+}
+
+func (m *AuthGRPCMetrics) Inc(outcome string) {
+	m.total.WithLabelValues(outcome).Inc()
+}
+
+func (m *AuthGRPCMetrics) Time(start time.Time) {
+	m.latency.Observe(time.Since(start).Seconds())
 }
