@@ -152,3 +152,44 @@ func TestTransformAlchemyTransfers_Fields(t *testing.T) {
 		t.Errorf("Type = %v, want %v", tx.Type, "erc20")
 	}
 }
+
+func TestTransformAlchemyTransfers_NativeETH(t *testing.T) {
+	data := map[string]interface{}{
+		"transfers": []interface{}{
+			map[string]interface{}{
+				"hash":     "0xdef456",
+				"from":     "0x333",
+				"to":       "0x444",
+				"category": "external",
+				"asset":    "ETH",
+				"rawContract": map[string]interface{}{
+					"value": "1000000000000000000",
+				},
+				"metadata": map[string]interface{}{
+					"blockTimestamp": "2024-03-15T10:30:00Z",
+				},
+			},
+		},
+	}
+
+	txs, err := TransformAlchemyTransfers(data)
+	if err != nil {
+		t.Fatalf("TransformAlchemyTransfers() error = %v", err)
+	}
+
+	if len(txs) != 1 {
+		t.Fatalf("Expected 1 transaction, got %d", len(txs))
+	}
+
+	tx := txs[0]
+	if tx.Symbol != "ETH" {
+		t.Errorf("Symbol = %v, want ETH", tx.Symbol)
+	}
+	expectedTokenAddr := "0x0000000000000000000000000000000000000000"
+	if tx.TokenAddress != expectedTokenAddr {
+		t.Errorf("TokenAddress = %v, want %v (native ETH address)", tx.TokenAddress, expectedTokenAddr)
+	}
+	if tx.Type != "external" {
+		t.Errorf("Type = %v, want external", tx.Type)
+	}
+}
