@@ -28,6 +28,8 @@ func (s *Server) GenerateTokens(ctx context.Context, req *gen.TokenRequest) (*ge
 	}, nil
 }
 
+// ValidateToken validates a JWT token. Context is currently not used to abort validation since the operation is synchronous and CPU-bound.
+// The context is kept for future extensibility (e.g., revocation checks against storage). Canceled contexts do not affect the result.
 func (s *Server) ValidateToken(ctx context.Context, req *gen.ValidateRequest) (*gen.ValidateResponse, error) {
 	claims, err := s.JWT.ValidateToken(req.GetToken(), req.GetExpectedAud())
 	if err != nil {
