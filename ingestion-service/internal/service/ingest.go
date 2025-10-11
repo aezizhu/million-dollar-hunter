@@ -3,30 +3,40 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
 
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/alchemy"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/breaker"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/config"
+	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/kafka"
+	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/metrics"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/models"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/moralis"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/ratelimit"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/repository"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/solana"
+	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/transformer"
 	"github.com/go-redis/redis/v8"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
 
 type Service struct {
-	cfg     *config.Config
-	logger  zerolog.Logger
-	db      *repository.Postgres
-	alc     *alchemy.Client
-	mor     *moralis.Client
-	sol     *solana.Client
-	jobch   chan models.IngestionJob
+	cfg            *config.Config
+	logger         zerolog.Logger
+	db             *repository.Postgres
+	alc            *alchemy.Client
+	mor            *moralis.Client
+	sol            *solana.Client
+	jobch          chan models.IngestionJob
+	producer       *kafka.Producer
+	kafkaMetrics   *metrics.KafkaMetrics
+	ingestionMetrics *metrics.IngestionMetrics
 }
 
-func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *repository.Postgres) (*Service, error) {
+func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *repository.Postgres, reg *prometheus.Registry) (*Service, error) {
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	alcBr := breaker.New("alchemy")
 	morBr := breaker.New("moralis")
@@ -37,21 +47,50 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 	alc := alchemy.New(cfg.AlchemyBaseURL, cfg.AlchemyAPIKey, alcBr, alcRl)
 	mor := moralis.New(cfg.MoralisBaseURL, cfg.MoralisAPIKey, morBr, morRl)
 	sol := solana.New(cfg.MoralisBaseURL, cfg.MoralisAPIKey, solBr, solRl)
+
+	var kafkaMetrics *metrics.KafkaMetrics
+	var ingestionMetrics *metrics.IngestionMetrics
+	if reg != nil {
+		kafkaMetrics = metrics.NewKafkaMetrics(reg, "ingestion")
+		ingestionMetrics = metrics.NewIngestionMetrics(reg, "ingestion")
+	}
+
+	var producer *kafka.Producer
+	if cfg.KafkaEnabled {
+		brokers := strings.Split(cfg.KafkaBrokers, ",")
+		p, err := kafka.NewProducer(ctx, brokers, cfg.KafkaTopicTxIngested, logger, kafkaMetrics)
+		if err != nil {
+			logger.Error().Err(err).Msg("kafka producer init failed, continuing without kafka")
+		} else {
+			producer = p
+		}
+	}
+
 	return &Service{
-		cfg:    cfg,
-		logger: logger,
-		db:     db,
-		alc:    alc,
-		mor:    mor,
-		sol:    sol,
-		jobch:  make(chan models.IngestionJob, 64),
+		cfg:              cfg,
+		logger:           logger,
+		db:               db,
+		alc:              alc,
+		mor:              mor,
+		sol:              sol,
+		jobch:            make(chan models.IngestionJob, 64),
+		producer:         producer,
+		kafkaMetrics:     kafkaMetrics,
+		ingestionMetrics: ingestionMetrics,
 	}, nil
 }
 
-func (s *Service) Enqueue(job models.IngestionJob) {
+func (s *Service) Enqueue(job models.IngestionJob) error {
 	select {
 	case s.jobch <- job:
+		return nil
 	default:
+		s.logger.Warn().
+			Str("wallet", job.Wallet).
+			Str("chain", job.Chain).
+			Int("queue_depth", len(s.jobch)).
+			Msg("job queue full, rejecting job")
+		return fmt.Errorf("job queue full (depth: %d/%d)", len(s.jobch), cap(s.jobch))
 	}
 }
 
@@ -77,6 +116,8 @@ func (s *Service) handleJob(ctx context.Context, job models.IngestionJob) error 
 		return s.handleSolanaJob(ctx, job)
 	}
 
+	var allTransactions []kafka.Transaction
+
 	transfers, err := s.alc.GetAssetTransfersAll(ctx, struct {
 		FromBlock    string   `json:"fromBlock,omitempty"`
 		ToBlock      string   `json:"toBlock,omitempty"`
@@ -94,72 +135,182 @@ func (s *Service) handleJob(ctx context.Context, job models.IngestionJob) error 
 	})
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Str("chain", job.Chain).Msg("alchemy transfers failed")
-	}
+	} else {
+		s.logger.Info().Int("count", len(transfers)).Str("wallet", job.Wallet).Msg("fetched alchemy transfers")
+		if len(transfers) > 0 {
+			if err := s.storeRaw(ctx, "alchemy", job.Wallet, job.Chain, transfers); err != nil {
+				s.logger.Error().Err(err).Msg("store alchemy transfers failed")
+			}
 
-	if len(transfers) > 0 {
-		if err := s.storeRaw(ctx, "alchemy", job.Wallet, job.Chain, transfers); err != nil {
-			s.logger.Error().Err(err).Msg("store transfers")
+			txs, err := transformer.TransformAlchemyTransfers(transfers)
+			if err != nil {
+				s.logger.Error().Err(err).Msg("transform alchemy transfers failed")
+			} else {
+				allTransactions = append(allTransactions, txs...)
+			}
 		}
 	}
 
 	bal, err := s.mor.GetWalletTokenBalancesPrice(ctx, job.Wallet, job.Chain)
-	if err == nil {
+	if err != nil {
+		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("moralis balances failed")
+	} else if bal != nil {
 		if err := s.storeRaw(ctx, "moralis", job.Wallet, job.Chain, bal); err != nil {
-			s.logger.Error().Err(err).Msg("store balances")
+			s.logger.Error().Err(err).Msg("store moralis balances failed")
 		}
+	}
+
+	if s.producer != nil {
+		event := kafka.TransactionDataIngestedEvent{
+			WalletAddress: job.Wallet,
+			Chain:         job.Chain,
+			Transactions:  allTransactions,
+		}
+		if err := s.producer.PublishTransactionDataIngested(ctx, event); err != nil {
+			s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("publish kafka event failed")
+			return err
+		}
+		s.logger.Info().
+			Str("wallet", job.Wallet).
+			Str("chain", job.Chain).
+			Int("transaction_count", len(allTransactions)).
+			Msg("published kafka event successfully")
 	}
 
 	return nil
 }
 
 func (s *Service) handleSolanaJob(ctx context.Context, job models.IngestionJob) error {
+	var allTransactions []kafka.Transaction
+
 	txs, err := s.sol.GetTransactions(ctx, solana.GetTransactionsParams{
 		Address: job.Wallet,
 		Limit:   1000,
 	})
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("solana transactions failed")
-	}
+	} else {
+		s.logger.Info().Int("count", len(txs)).Str("wallet", job.Wallet).Msg("fetched solana transactions")
+		if len(txs) > 0 {
+			if err := s.storeRaw(ctx, "solana", job.Wallet, job.Chain, txs); err != nil {
+				s.logger.Error().Err(err).Msg("store solana transactions failed")
+			}
 
-	if len(txs) > 0 {
-		if err := s.storeRaw(ctx, "solana", job.Wallet, job.Chain, txs); err != nil {
-			s.logger.Error().Err(err).Msg("store solana transactions")
+			transformed, err := transformer.TransformSolanaTransactions(txs)
+			if err != nil {
+				s.logger.Error().Err(err).Msg("transform solana transactions failed")
+			} else {
+				allTransactions = append(allTransactions, transformed...)
+			}
 		}
 	}
 
 	balances, err := s.sol.GetTokenBalances(ctx, job.Wallet)
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("solana balances failed")
-	}
-
-	if len(balances) > 0 {
+	} else if len(balances) > 0 {
 		if err := s.storeRaw(ctx, "solana_balances", job.Wallet, job.Chain, balances); err != nil {
-			s.logger.Error().Err(err).Msg("store solana balances")
+			s.logger.Error().Err(err).Msg("store solana balances failed")
 		}
 	}
 
 	bal, err := s.mor.GetWalletTokenBalancesPrice(ctx, job.Wallet, job.Chain)
-	if err == nil {
+	if err != nil {
+		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("moralis balances failed")
+	} else if bal != nil {
 		if err := s.storeRaw(ctx, "moralis", job.Wallet, job.Chain, bal); err != nil {
-			s.logger.Error().Err(err).Msg("store moralis balances")
+			s.logger.Error().Err(err).Msg("store moralis balances failed")
 		}
+	}
+
+	if s.producer != nil {
+		event := kafka.TransactionDataIngestedEvent{
+			WalletAddress: job.Wallet,
+			Chain:         job.Chain,
+			Transactions:  allTransactions,
+		}
+		if err := s.producer.PublishTransactionDataIngested(ctx, event); err != nil {
+			s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("publish kafka event failed")
+			return err
+		}
+		s.logger.Info().
+			Str("wallet", job.Wallet).
+			Str("chain", job.Chain).
+			Int("transaction_count", len(allTransactions)).
+			Msg("published kafka event successfully")
 	}
 
 	return nil
 }
 
 func (s *Service) storeRaw(ctx context.Context, source, wallet, chain string, data any) error {
-	b, _ := json.Marshal(data)
-	_, err := s.db.Pool.Exec(ctx, `
-INSERT INTO raw_transactions (source_api, wallet_address, chain, data)
-SELECT $1, $2, $3, $4
-`, source, wallet, chain, b)
+	b, err := json.Marshal(data)
 	if err != nil {
-		_, err2 := s.db.Pool.Exec(ctx, `
-INSERT INTO raw_balances (wallet_address, chain, data)
-SELECT $1, $2, $3
-`, wallet, chain, b)
-		return err2
+		return fmt.Errorf("marshal data: %w", err)
 	}
+
+	var storeErr error
+	if source == "alchemy" || source == "solana" {
+		_, storeErr = s.db.Pool.Exec(ctx, `
+INSERT INTO raw_transactions (source_api, wallet_address, chain, data)
+VALUES ($1, $2, $3, $4)
+`, source, wallet, chain, b)
+	} else {
+		_, storeErr = s.db.Pool.Exec(ctx, `
+INSERT INTO raw_balances (wallet_address, chain, data)
+VALUES ($1, $2, $3)
+`, wallet, chain, b)
+	}
+
+	if storeErr != nil {
+		return fmt.Errorf("store raw data (source=%s): %w", source, storeErr)
+	}
+
 	return nil
+}
+
+func (s *Service) Close() error {
+	s.logger.Info().Msg("closing service")
+	
+	if s.producer != nil {
+		s.logger.Info().Msg("closing kafka producer")
+		if err := s.producer.Close(); err != nil {
+			return fmt.Errorf("close producer: %w", err)
+		}
+	}
+	
+	return nil
+}
+
+func (s *Service) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	
+	status := "ok"
+	kafkaStatus := "enabled"
+	
+	if s.cfg.KafkaEnabled {
+		if s.producer == nil {
+			status = "degraded"
+			kafkaStatus = "unavailable"
+		}
+	} else {
+		kafkaStatus = "disabled"
+	}
+	
+	queueDepth := len(s.jobch)
+	
+	response := map[string]interface{}{
+		"status":       status,
+		"kafka":        kafkaStatus,
+		"queue_depth":  queueDepth,
+		"queue_capacity": cap(s.jobch),
+	}
+	
+	statusCode := http.StatusOK
+	if status == "degraded" {
+		statusCode = http.StatusServiceUnavailable
+	}
+	
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(response)
 }

@@ -63,13 +63,14 @@ type Asset struct {
 }
 
 type Transaction struct {
-	Hash      string    `json:"hash"`
-	From      string    `json:"from"`
-	To        string    `json:"to"`
-	Amount    string    `json:"amount"`
-	Symbol    string    `json:"symbol"`
-	Timestamp time.Time `json:"timestamp"`
-	Type      string    `json:"type"`
+	Hash         string    `json:"hash"`
+	From         string    `json:"from"`
+	To           string    `json:"to"`
+	Amount       string    `json:"amount"`
+	Symbol       string    `json:"symbol"`
+	TokenAddress string    `json:"token_address"`
+	Timestamp    time.Time `json:"timestamp"`
+	Type         string    `json:"type"`
 }
 
 type TransactionDataIngestedEvent struct {
@@ -125,6 +126,10 @@ func (r *Repo) upsertWallet(ctx context.Context, tx pgx.Tx, address, chain strin
 
 func (r *Repo) processTransactions(ctx context.Context, tx pgx.Tx, walletID uuid.UUID, transactions []Transaction) error {
 	for _, txn := range transactions {
+		if txn.Hash == "" {
+			continue
+		}
+
 		_, err := tx.Exec(ctx, `
 			INSERT INTO transactions_view (wallet_id, ts, type, from_addr, to_addr, asset_symbol, amount, tx_hash)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -134,14 +139,16 @@ func (r *Repo) processTransactions(ctx context.Context, tx pgx.Tx, walletID uuid
 			return fmt.Errorf("insert transaction: %w", err)
 		}
 
-		_, err = tx.Exec(ctx, `
-			INSERT INTO assets (wallet_id, token_address, symbol, current_balance, updated_at)
-			VALUES ($1, $2, $3, $4, now())
-			ON CONFLICT (wallet_id, token_address) 
-			DO UPDATE SET current_balance = EXCLUDED.current_balance, updated_at = now()
-		`, walletID, txn.Symbol, txn.Symbol, txn.Amount)
-		if err != nil {
-			return fmt.Errorf("upsert asset: %w", err)
+		if txn.TokenAddress != "" {
+			_, err = tx.Exec(ctx, `
+				INSERT INTO assets (wallet_id, token_address, symbol, current_balance, updated_at)
+				VALUES ($1, $2, $3, $4, now())
+				ON CONFLICT (wallet_id, token_address) 
+				DO UPDATE SET current_balance = EXCLUDED.current_balance, updated_at = now()
+			`, walletID, txn.TokenAddress, txn.Symbol, txn.Amount)
+			if err != nil {
+				return fmt.Errorf("upsert asset: %w", err)
+			}
 		}
 	}
 	return nil

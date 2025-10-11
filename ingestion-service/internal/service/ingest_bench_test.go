@@ -30,7 +30,7 @@ func BenchmarkIngestionThroughput(b *testing.B) {
 	if err := repository.RunMigrations(ctx, cfg, logger); err != nil {
 		b.Fatal(err)
 	}
-	svc, err := New(ctx, cfg, logger, db)
+	svc, err := New(ctx, cfg, logger, db, nil)
 	if err != nil {
 		b.Fatal(err)
 	}

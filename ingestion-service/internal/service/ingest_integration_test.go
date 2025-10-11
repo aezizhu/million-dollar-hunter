@@ -35,7 +35,7 @@ func setupTestService(t *testing.T) (*Service, *repository.Postgres, func()) {
 		t.Fatalf("migrations: %v", err)
 	}
 
-	svc, err := New(ctx, cfg, logger, db)
+	svc, err := New(ctx, cfg, logger, db, nil)
 	if err != nil {
 		db.Close()
 		t.Fatalf("service init: %v", err)
