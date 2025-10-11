@@ -82,8 +82,10 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 	grpcClients := clients.NewGRPCClients(cfg.PortfolioServiceURL, cfg.MarketDataServiceURL, cfg.AuthGRPCAddr, logger)
 
 	httpMetrics := observability.NewHTTPMetrics(reg, cfg.PrometheusNamespace)
+	authMetrics := observability.NewAuthGRPCMetrics(reg, cfg.PrometheusNamespace)
 	r.Use(func(c *gin.Context) {
 		c.Set("http_metrics", httpMetrics)
+		c.Set("auth_grpc_metrics", authMetrics)
 		c.Next()
 	})
 
