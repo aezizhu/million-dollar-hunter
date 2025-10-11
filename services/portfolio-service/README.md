@@ -11,11 +11,22 @@ Build
 Proto
 - make proto (requires protoc and protoc-gen-go, protoc-gen-go-grpc)
 
+Configuration
+- Copy .env.example to .env and adjust values for your environment
+- See .env.example for detailed documentation of all configuration options
+- Key settings: gRPC address, database connection, Kafka brokers, logging, observability
+
 Migrations
 - Set DATABASE_URL, then: make migrate-up
 
 Run locally
 - docker compose -f ../../ops/docker-compose.yml up -d --build
 
-Env
-- GRPC_ADDR, DATABASE_URL, KAFKA_BROKERS, TOPIC_TRANSACTION_INGESTED, TOPIC_PORTFOLIO_UPDATED, KAFKA_GROUP_ID, EXPORT_DIR
+Env Variables
+- See .env.example for full list and documentation
+- Core: GRPC_ADDR, DATABASE_URL, KAFKA_BROKERS, KAFKA_GROUP_ID
+- Database Pool: DB_MAX_CONNS, DB_MIN_CONNS, DB_MAX_CONN_LIFETIME, DB_MAX_CONN_IDLE_TIME, DB_HEALTH_CHECK_PERIOD
+- Topics: TOPIC_TRANSACTION_INGESTED, TOPIC_PORTFOLIO_UPDATED
+- Logging: LOG_LEVEL, LOG_FORMAT
+- Observability: OTEL_EXPORTER_OTLP_ENDPOINT, PROMETHEUS_NAMESPACE
+- Export: EXPORT_DIR

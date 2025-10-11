@@ -16,17 +16,25 @@ type Repo struct {
 	db *pgxpool.Pool
 }
 
-func NewPostgres(url string) (*Repo, error) {
+type PoolConfig struct {
+	MaxConns          int32
+	MinConns          int32
+	MaxConnLifetime   time.Duration
+	MaxConnIdleTime   time.Duration
+	HealthCheckPeriod time.Duration
+}
+
+func NewPostgres(url string, poolCfg PoolConfig) (*Repo, error) {
 	cfg, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg.MaxConns = 20
-	cfg.MinConns = 5
-	cfg.MaxConnLifetime = time.Hour
-	cfg.MaxConnIdleTime = 30 * time.Minute
-	cfg.HealthCheckPeriod = time.Minute
+	cfg.MaxConns = poolCfg.MaxConns
+	cfg.MinConns = poolCfg.MinConns
+	cfg.MaxConnLifetime = poolCfg.MaxConnLifetime
+	cfg.MaxConnIdleTime = poolCfg.MaxConnIdleTime
+	cfg.HealthCheckPeriod = poolCfg.HealthCheckPeriod
 
 	pool, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	if err != nil {
