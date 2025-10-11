@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -98,13 +99,30 @@ func isPermanentError(err error) bool {
 	if err == nil {
 		return false
 	}
+
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		return true
+	}
+
 	errMsg := strings.ToLower(err.Error())
-	return strings.Contains(errMsg, "unmarshal") ||
-		strings.Contains(errMsg, "invalid") ||
-		strings.Contains(errMsg, "malformed") ||
-		strings.Contains(errMsg, "empty payload") ||
-		strings.Contains(errMsg, "bad request") ||
-		strings.Contains(errMsg, "validation failed")
+	permanentKeywords := []string{
+		"unmarshal",
+		"malformed",
+		"empty payload",
+		"invalid format",
+		"invalid json",
+		"bad request",
+		"validation failed",
+	}
+
+	for _, keyword := range permanentKeywords {
+		if strings.Contains(errMsg, keyword) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func isTransientError(err error) bool {

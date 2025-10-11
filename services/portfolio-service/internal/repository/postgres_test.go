@@ -82,11 +82,11 @@ func TestGetWalletDetails(t *testing.T) {
 			WithArgs(walletUUID).
 			WillReturnRows(walletRow)
 
-		assetRows := pgxmock.NewRows([]string{"token_address", "symbol", "name", "current_balance", "usd_value"}).
-			AddRow("0xabc", "USDC", "USD Coin", "1000.5", float64(1000.50)).
-			AddRow("0xdef", "USDT", "Tether", "500.25", float64(500.25))
+		assetRows := pgxmock.NewRows([]string{"token_address", "symbol", "current_balance", "usd_value"}).
+			AddRow("0xabc", "USDC", float64(1000.5), float64(1000.50)).
+			AddRow("0xdef", "USDT", float64(500.25), float64(500.25))
 
-		mock.ExpectQuery("SELECT DISTINCT ON").
+		mock.ExpectQuery("SELECT.*FROM transactions_view").
 			WithArgs(walletUUID).
 			WillReturnRows(assetRows)
 
@@ -208,11 +208,7 @@ func TestUpsertFromIngest(t *testing.T) {
 			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(walletUUID))
 
 		mock.ExpectExec("INSERT INTO transactions_view").
-			WithArgs(walletUUID, pgxmock.AnyArg(), "send", "0xfrom", "0xto", "USDC", "100", "0xhash1").
-			WillReturnResult(pgxmock.NewResult("INSERT", 1))
-
-		mock.ExpectExec("INSERT INTO assets").
-			WithArgs(walletUUID, "0xabc", "USDC", "100").
+			WithArgs(walletUUID, pgxmock.AnyArg(), "send", "0xfrom", "0xto", "USDC", "100", "0xhash1", "0xabc").
 			WillReturnResult(pgxmock.NewResult("INSERT", 1))
 
 		mock.ExpectCommit()
@@ -246,11 +242,11 @@ func TestGetPortfolioByWalletID(t *testing.T) {
 	walletID := uuid.New().String()
 
 	t.Run("success", func(t *testing.T) {
-		rows := pgxmock.NewRows([]string{"token_address", "symbol", "name", "current_balance", "usd_value"}).
-			AddRow("0xabc", "USDC", "USD Coin", "1000.5", float64(1000.50)).
-			AddRow("0xdef", "USDT", "Tether", "500.25", float64(500.25))
+		rows := pgxmock.NewRows([]string{"token_address", "symbol", "current_balance", "usd_value"}).
+			AddRow("0xabc", "USDC", float64(1000.5), float64(1000.50)).
+			AddRow("0xdef", "USDT", float64(500.25), float64(500.25))
 
-		mock.ExpectQuery("SELECT DISTINCT ON").
+		mock.ExpectQuery("SELECT.*FROM transactions_view").
 			WithArgs(walletID).
 			WillReturnRows(rows)
 
@@ -263,7 +259,7 @@ func TestGetPortfolioByWalletID(t *testing.T) {
 	})
 
 	t.Run("query error", func(t *testing.T) {
-		mock.ExpectQuery("SELECT DISTINCT ON").
+		mock.ExpectQuery("SELECT.*FROM transactions_view").
 			WithArgs(walletID).
 			WillReturnError(errors.New("db error"))
 
@@ -271,5 +267,63 @@ func TestGetPortfolioByWalletID(t *testing.T) {
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "query assets")
+	})
+}
+
+func TestBalanceAccumulation(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	repo := &Repo{db: mock}
+
+	t.Run("multiple transactions accumulate correctly", func(t *testing.T) {
+		event := TransactionDataIngestedEvent{
+			WalletAddress: "0x123",
+			Chain:         "ethereum",
+			Transactions: []Transaction{
+				{Hash: "0xhash1", TokenAddress: "0xUSDC", Symbol: "USDC", Amount: "100", Type: "receive", Timestamp: time.Now(), From: "0xfrom1", To: "0x123"},
+				{Hash: "0xhash2", TokenAddress: "0xUSDC", Symbol: "USDC", Amount: "50", Type: "receive", Timestamp: time.Now(), From: "0xfrom2", To: "0x123"},
+				{Hash: "0xhash3", TokenAddress: "0xUSDC", Symbol: "USDC", Amount: "25", Type: "send", Timestamp: time.Now(), From: "0x123", To: "0xto1"},
+			},
+		}
+		payload, _ := json.Marshal(event)
+
+		walletUUID := uuid.New()
+
+		mock.ExpectBegin()
+		mock.ExpectQuery("INSERT INTO wallets").
+			WithArgs("0x123", "ethereum").
+			WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(walletUUID))
+
+		mock.ExpectExec("INSERT INTO transactions_view").
+			WithArgs(walletUUID, pgxmock.AnyArg(), "receive", "0xfrom1", "0x123", "USDC", "100", "0xhash1", "0xUSDC").
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectExec("INSERT INTO transactions_view").
+			WithArgs(walletUUID, pgxmock.AnyArg(), "receive", "0xfrom2", "0x123", "USDC", "50", "0xhash2", "0xUSDC").
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectExec("INSERT INTO transactions_view").
+			WithArgs(walletUUID, pgxmock.AnyArg(), "send", "0x123", "0xto1", "USDC", "25", "0xhash3", "0xUSDC").
+			WillReturnResult(pgxmock.NewResult("INSERT", 1))
+
+		mock.ExpectCommit()
+
+		err := repo.UpsertFromIngest(context.Background(), payload)
+		assert.NoError(t, err)
+
+		balanceRows := pgxmock.NewRows([]string{"token_address", "symbol", "current_balance", "usd_value"}).
+			AddRow("0xUSDC", "USDC", float64(125), float64(125))
+
+		mock.ExpectQuery("SELECT.*FROM transactions_view").
+			WithArgs(walletUUID.String()).
+			WillReturnRows(balanceRows)
+
+		portfolio, err := repo.GetPortfolioByWalletID(context.Background(), walletUUID.String())
+
+		assert.NoError(t, err)
+		assert.Len(t, portfolio.Assets, 1)
+		assert.Equal(t, "125.000000000000000000", portfolio.Assets[0].CurrentBalance)
 	})
 }

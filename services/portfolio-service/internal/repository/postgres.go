@@ -138,24 +138,12 @@ func (r *Repo) processTransactions(ctx context.Context, tx pgx.Tx, walletID uuid
 		}
 
 		_, err := tx.Exec(ctx, `
-			INSERT INTO transactions_view (wallet_id, ts, type, from_addr, to_addr, asset_symbol, amount, tx_hash)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			INSERT INTO transactions_view (wallet_id, ts, type, from_addr, to_addr, asset_symbol, amount, tx_hash, token_address)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			ON CONFLICT (tx_hash) DO NOTHING
-		`, walletID, txn.Timestamp, txn.Type, txn.From, txn.To, txn.Symbol, txn.Amount, txn.Hash)
+		`, walletID, txn.Timestamp, txn.Type, txn.From, txn.To, txn.Symbol, txn.Amount, txn.Hash, txn.TokenAddress)
 		if err != nil {
 			return fmt.Errorf("insert transaction: %w", err)
-		}
-
-		if txn.TokenAddress != "" {
-			_, err = tx.Exec(ctx, `
-				INSERT INTO assets (wallet_id, token_address, symbol, current_balance, updated_at)
-				VALUES ($1, $2, $3, $4, now())
-				ON CONFLICT (wallet_id, token_address) 
-				DO UPDATE SET current_balance = EXCLUDED.current_balance, updated_at = now()
-			`, walletID, txn.TokenAddress, txn.Symbol, txn.Amount)
-			if err != nil {
-				return fmt.Errorf("upsert asset: %w", err)
-			}
 		}
 	}
 	return nil
@@ -171,18 +159,32 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 	}
 
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT ON (a.id)
-			a.token_address, a.symbol, a.name, a.current_balance, 
-			COALESCE(s.usd_value, 0) as usd_value
-		FROM assets a
+		SELECT 
+			t.token_address,
+			t.asset_symbol as symbol,
+			SUM(CASE 
+				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+				ELSE 0
+			END) as current_balance,
+			COALESCE(MAX(s.usd_value), 0) as usd_value
+		FROM transactions_view t
 		LEFT JOIN LATERAL (
 			SELECT usd_value FROM asset_snapshots 
-			WHERE asset_id = a.id 
+			WHERE wallet_id = t.wallet_id AND token_address = t.token_address
 			ORDER BY ts DESC 
 			LIMIT 1
 		) s ON true
-		WHERE a.wallet_id = (SELECT id FROM wallets WHERE id = $1 OR address = $1 LIMIT 1)
-		ORDER BY a.id, CAST(a.current_balance AS NUMERIC) DESC
+		WHERE t.wallet_id = (SELECT id FROM wallets WHERE id = $1 OR address = $1 LIMIT 1)
+			AND t.token_address IS NOT NULL 
+			AND t.token_address != ''
+		GROUP BY t.token_address, t.asset_symbol
+		HAVING SUM(CASE 
+			WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+			WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+			ELSE 0
+		END) > 0
+		ORDER BY usd_value DESC, current_balance DESC
 	`, walletID)
 	if err != nil {
 		return nil, fmt.Errorf("query assets: %w", err)
@@ -191,9 +193,11 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 
 	for rows.Next() {
 		var asset Asset
-		if err := rows.Scan(&asset.TokenAddress, &asset.Symbol, &asset.Name, &asset.CurrentBalance, &asset.USDValue); err != nil {
+		var balance float64
+		if err := rows.Scan(&asset.TokenAddress, &asset.Symbol, &balance, &asset.USDValue); err != nil {
 			return nil, fmt.Errorf("scan asset: %w", err)
 		}
+		asset.CurrentBalance = fmt.Sprintf("%.18f", balance)
 		portfolio.Assets = append(portfolio.Assets, asset)
 		portfolio.TotalUSDValue += asset.USDValue
 	}
@@ -290,18 +294,32 @@ func (r *Repo) GetWalletDetails(ctx context.Context, walletID, address string) (
 	details.WalletID = walletUUID
 
 	rows, err := r.db.Query(ctx, `
-		SELECT DISTINCT ON (a.id)
-			a.token_address, a.symbol, a.name, a.current_balance, 
-			COALESCE(s.usd_value, 0) as usd_value
-		FROM assets a
+		SELECT 
+			t.token_address,
+			t.asset_symbol as symbol,
+			SUM(CASE 
+				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+				ELSE 0
+			END) as current_balance,
+			COALESCE(MAX(s.usd_value), 0) as usd_value
+		FROM transactions_view t
 		LEFT JOIN LATERAL (
 			SELECT usd_value FROM asset_snapshots 
-			WHERE asset_id = a.id 
+			WHERE wallet_id = t.wallet_id AND token_address = t.token_address
 			ORDER BY ts DESC 
 			LIMIT 1
 		) s ON true
-		WHERE a.wallet_id = $1
-		ORDER BY a.id, CAST(a.current_balance AS NUMERIC) DESC
+		WHERE t.wallet_id = $1
+			AND t.token_address IS NOT NULL 
+			AND t.token_address != ''
+		GROUP BY t.token_address, t.asset_symbol
+		HAVING SUM(CASE 
+			WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+			WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+			ELSE 0
+		END) > 0
+		ORDER BY usd_value DESC, current_balance DESC
 	`, walletUUID)
 	if err != nil {
 		return nil, fmt.Errorf("query assets: %w", err)
@@ -311,9 +329,11 @@ func (r *Repo) GetWalletDetails(ctx context.Context, walletID, address string) (
 	details.Assets = make([]Asset, 0)
 	for rows.Next() {
 		var asset Asset
-		if err := rows.Scan(&asset.TokenAddress, &asset.Symbol, &asset.Name, &asset.CurrentBalance, &asset.USDValue); err != nil {
+		var balance float64
+		if err := rows.Scan(&asset.TokenAddress, &asset.Symbol, &balance, &asset.USDValue); err != nil {
 			return nil, fmt.Errorf("scan asset: %w", err)
 		}
+		asset.CurrentBalance = fmt.Sprintf("%.18f", balance)
 		details.Assets = append(details.Assets, asset)
 		details.TotalUSDValue += asset.USDValue
 	}
@@ -326,12 +346,19 @@ type TransactionResult struct {
 	TotalCount   int32
 }
 
+const (
+	DefaultPageLimit = 50
+	MaxPageLimit     = 1000
+)
+
 func (r *Repo) GetTransactionHistory(ctx context.Context, walletID, address string, page, limit int32, filterByType string) (*TransactionResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	if limit <= 0 {
-		limit = 50
+		limit = DefaultPageLimit
+	} else if limit > MaxPageLimit {
+		limit = MaxPageLimit
 	}
 	if page < 1 {
 		page = 1

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -75,6 +77,10 @@ func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*
 		return nil, status.Error(codes.InvalidArgument, "wallet_id is required")
 	}
 
+	if !isValidWalletID(req.GetWalletId()) {
+		return nil, status.Error(codes.InvalidArgument, "invalid wallet_id format")
+	}
+
 	portfolio, err := s.repo.GetPortfolioByWalletID(ctx, req.GetWalletId())
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -83,12 +89,18 @@ func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*
 		return nil, status.Errorf(codes.Internal, "fetch portfolio: %v", err)
 	}
 
-	if err := os.MkdirAll(s.cfg.ExportDir, 0o755); err != nil {
+	absExportDir, err := filepath.Abs(s.cfg.ExportDir)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "invalid export dir config: %v", err)
+	}
+
+	if err := os.MkdirAll(absExportDir, 0o755); err != nil {
 		return nil, status.Errorf(codes.Internal, "create export dir: %v", err)
 	}
 
+	safeWalletID := sanitizeForFilename(req.GetWalletId())
 	exportID := uuid.New().String()
-	filename := fmt.Sprintf("portfolio_%s_%s", req.GetWalletId(), exportID)
+	filename := fmt.Sprintf("portfolio_%s_%s", safeWalletID, exportID)
 	var data []byte
 
 	if req.GetFormat() == pb.ExportFormat_EXPORT_FORMAT_JSON {
@@ -105,12 +117,39 @@ func (s *PortfolioService) Export(ctx context.Context, req *pb.ExportRequest) (*
 		}
 	}
 
-	path := filepath.Join(s.cfg.ExportDir, filename)
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	fullPath := filepath.Join(absExportDir, filename)
+	absPath, err := filepath.Abs(fullPath)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "invalid export path: %v", err)
+	}
+
+	if !strings.HasPrefix(absPath, absExportDir+string(filepath.Separator)) {
+		return nil, status.Error(codes.InvalidArgument, "invalid wallet_id: contains illegal characters")
+	}
+
+	if err := os.WriteFile(absPath, data, 0o644); err != nil {
 		return nil, status.Errorf(codes.Internal, "write file: %v", err)
 	}
 
 	return &pb.ExportResponse{Path: filename}, nil
+}
+
+func isValidWalletID(id string) bool {
+	if matched, _ := regexp.MatchString(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, strings.ToLower(id)); matched {
+		return true
+	}
+	if matched, _ := regexp.MatchString(`^0x[0-9a-fA-F]{40}$`, id); matched {
+		return true
+	}
+	return false
+}
+
+func sanitizeForFilename(input string) string {
+	safe := strings.ReplaceAll(input, "..", "_")
+	safe = strings.ReplaceAll(safe, "/", "_")
+	safe = strings.ReplaceAll(safe, "\\", "_")
+	safe = strings.ReplaceAll(safe, "\x00", "_")
+	return safe
 }
 
 func (s *PortfolioService) generateCSV(portfolio *repository.Portfolio) ([]byte, error) {
