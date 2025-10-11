@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,37 +28,52 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to parse config")
 	}
 
-	if os.Getenv("ENABLE_MULTI_USER") != "true" {
+	multiUser := false
+	if val := os.Getenv("ENABLE_MULTI_USER"); val != "" {
+		switch strings.ToLower(val) {
+		case "true", "1", "yes":
+			multiUser = true
+		case "false", "0", "no":
+			multiUser = false
+		default:
+			log.Fatal().Str("value", val).Msg("ENABLE_MULTI_USER must be true/false/1/0/yes/no")
+		}
+	}
+
+	if !multiUser {
 		if os.Getenv("MVP_USERNAME") == "" {
-			log.Fatal().Msg("MVP_USERNAME environment variable is required when ENABLE_MULTI_USER is false")
+			log.Fatal().Msg("MVP_USERNAME is required in MVP mode")
 		}
-		if os.Getenv("MVP_PASSWORD") == "" {
-			log.Fatal().Msg("MVP_PASSWORD environment variable is required when ENABLE_MULTI_USER is false")
+		mvpPass := os.Getenv("MVP_PASSWORD")
+		if mvpPass == "" {
+			log.Fatal().Msg("MVP_PASSWORD is required in MVP mode")
 		}
-		log.Info().Msg("Running in MVP mode with hardcoded credentials")
+		if !strings.HasPrefix(mvpPass, "$2a$") && !strings.HasPrefix(mvpPass, "$2b$") {
+			log.Warn().Msg("MVP_PASSWORD does not appear to be a bcrypt hash")
+		}
+		log.Info().Msg("Running in MVP mode")
 	} else {
 		if os.Getenv("DATABASE_URL") == "" {
-			log.Fatal().Msg("DATABASE_URL environment variable is required when ENABLE_MULTI_USER is true")
+			log.Fatal().Msg("DATABASE_URL is required in multi-user mode")
 		}
-		log.Info().Msg("Running in multi-user mode with database authentication")
+		log.Info().Msg("Running in multi-user mode")
 	}
 
 	j := jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
 
 	mux := http.NewServeMux()
 	s := &httpapi.Server{Logger: &log, JWT: j}
-	if os.Getenv("ENABLE_MULTI_USER") == "true" {
-		if dsn := os.Getenv("DATABASE_URL"); dsn != "" {
-			pool, err := pgxpool.New(context.Background(), dsn)
-			if err != nil {
-				log.Fatal().Err(err).Msg("database connection failed")
-			}
-			pg := &store.PGStore{Pool: pool}
-			s.Store = pg
-			s.RefreshTokens = pg
-			s.Audit = pg
-			defer pool.Close()
+	if multiUser {
+		dsn := os.Getenv("DATABASE_URL")
+		pool, err := pgxpool.New(context.Background(), dsn)
+		if err != nil {
+			log.Fatal().Err(err).Msg("database connection failed")
 		}
+		pg := &store.PGStore{Pool: pool}
+		s.Store = pg
+		s.RefreshTokens = pg
+		s.Audit = pg
+		defer pool.Close()
 	}
 	mux.HandleFunc("/healthz", s.Health)
 	mux.HandleFunc("/api/v1/auth/login", s.Login)
