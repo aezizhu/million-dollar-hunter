@@ -40,7 +40,7 @@ func TestNewProducer_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewProducer(ctx, tt.brokers, tt.topic, logger)
+			_, err := NewProducer(ctx, tt.brokers, tt.topic, logger, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("NewProducer() error = %v, wantErr %v", err, tt.wantErr)
 			}

@@ -11,6 +11,7 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/breaker"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/kafka"
+	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/metrics"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/models"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/moralis"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/ratelimit"
@@ -18,21 +19,24 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/solana"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/transformer"
 	"github.com/go-redis/redis/v8"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
 
 type Service struct {
-	cfg      *config.Config
-	logger   zerolog.Logger
-	db       *repository.Postgres
-	alc      *alchemy.Client
-	mor      *moralis.Client
-	sol      *solana.Client
-	jobch    chan models.IngestionJob
-	producer *kafka.Producer
+	cfg            *config.Config
+	logger         zerolog.Logger
+	db             *repository.Postgres
+	alc            *alchemy.Client
+	mor            *moralis.Client
+	sol            *solana.Client
+	jobch          chan models.IngestionJob
+	producer       *kafka.Producer
+	kafkaMetrics   *metrics.KafkaMetrics
+	ingestionMetrics *metrics.IngestionMetrics
 }
 
-func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *repository.Postgres) (*Service, error) {
+func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *repository.Postgres, reg *prometheus.Registry) (*Service, error) {
 	rdb := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr})
 	alcBr := breaker.New("alchemy")
 	morBr := breaker.New("moralis")
@@ -44,10 +48,17 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 	mor := moralis.New(cfg.MoralisBaseURL, cfg.MoralisAPIKey, morBr, morRl)
 	sol := solana.New(cfg.MoralisBaseURL, cfg.MoralisAPIKey, solBr, solRl)
 
+	var kafkaMetrics *metrics.KafkaMetrics
+	var ingestionMetrics *metrics.IngestionMetrics
+	if reg != nil {
+		kafkaMetrics = metrics.NewKafkaMetrics(reg, "ingestion")
+		ingestionMetrics = metrics.NewIngestionMetrics(reg, "ingestion")
+	}
+
 	var producer *kafka.Producer
 	if cfg.KafkaEnabled {
 		brokers := strings.Split(cfg.KafkaBrokers, ",")
-		p, err := kafka.NewProducer(ctx, brokers, cfg.KafkaTopicTxIngested, logger)
+		p, err := kafka.NewProducer(ctx, brokers, cfg.KafkaTopicTxIngested, logger, kafkaMetrics)
 		if err != nil {
 			logger.Error().Err(err).Msg("kafka producer init failed, continuing without kafka")
 		} else {
@@ -56,14 +67,16 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 	}
 
 	return &Service{
-		cfg:      cfg,
-		logger:   logger,
-		db:       db,
-		alc:      alc,
-		mor:      mor,
-		sol:      sol,
-		jobch:    make(chan models.IngestionJob, 64),
-		producer: producer,
+		cfg:              cfg,
+		logger:           logger,
+		db:               db,
+		alc:              alc,
+		mor:              mor,
+		sol:              sol,
+		jobch:            make(chan models.IngestionJob, 64),
+		producer:         producer,
+		kafkaMetrics:     kafkaMetrics,
+		ingestionMetrics: ingestionMetrics,
 	}, nil
 }
 

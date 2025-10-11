@@ -29,7 +29,7 @@ func TestIngestWithWiremock(t *testing.T) {
 	if err := repository.RunMigrations(ctx, cfg, logger); err != nil {
 		t.Fatal(err)
 	}
-	svc, err := New(ctx, cfg, logger, db)
+	svc, err := New(ctx, cfg, logger, db, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

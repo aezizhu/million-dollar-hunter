@@ -13,6 +13,8 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/logging"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/repository"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/service"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -37,7 +39,11 @@ func main() {
 		logger.Fatal().Err(err).Msg("migrations")
 	}
 
-	svc, err := service.New(ctx, cfg, logger, db)
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(prometheus.NewGoCollector())
+	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+
+	svc, err := service.New(ctx, cfg, logger, db, reg)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("service init")
 	}
@@ -51,6 +57,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", svc.HealthCheckHandler)
+	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/metrics"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -15,6 +16,7 @@ type Producer struct {
 	producer sarama.SyncProducer
 	topic    string
 	logger   zerolog.Logger
+	metrics  *metrics.KafkaMetrics
 }
 
 type Transaction struct {
@@ -36,7 +38,7 @@ type TransactionDataIngestedEvent struct {
 	Transactions  []Transaction `json:"transactions"`
 }
 
-func NewProducer(ctx context.Context, brokers []string, topic string, logger zerolog.Logger) (*Producer, error) {
+func NewProducer(ctx context.Context, brokers []string, topic string, logger zerolog.Logger, metrics *metrics.KafkaMetrics) (*Producer, error) {
 	if len(brokers) == 0 {
 		return nil, fmt.Errorf("at least one broker required")
 	}
@@ -55,7 +57,15 @@ func NewProducer(ctx context.Context, brokers []string, topic string, logger zer
 
 	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
+		if metrics != nil {
+			metrics.ConnectionErrors.Inc()
+			metrics.Connected.Set(0)
+		}
 		return nil, fmt.Errorf("create producer: %w", err)
+	}
+
+	if metrics != nil {
+		metrics.Connected.Set(1)
 	}
 
 	logger.Info().
@@ -67,6 +77,7 @@ func NewProducer(ctx context.Context, brokers []string, topic string, logger zer
 		producer: producer,
 		topic:    topic,
 		logger:   logger,
+		metrics:  metrics,
 	}, nil
 }
 
@@ -89,6 +100,9 @@ func (p *Producer) PublishTransactionDataIngested(ctx context.Context, event Tra
 	data, err := json.Marshal(event)
 	if err != nil {
 		p.logger.Error().Err(err).Msg("marshal kafka event failed")
+		if p.metrics != nil {
+			p.metrics.ObservePublish(p.topic, err, 0, start)
+		}
 		return fmt.Errorf("marshal event: %w", err)
 	}
 
@@ -103,6 +117,11 @@ func (p *Producer) PublishTransactionDataIngested(ctx context.Context, event Tra
 	}
 
 	partition, offset, err := p.producer.SendMessage(msg)
+	
+	if p.metrics != nil {
+		p.metrics.ObservePublish(p.topic, err, len(data), start)
+	}
+	
 	if err != nil {
 		p.logger.Error().
 			Err(err).
