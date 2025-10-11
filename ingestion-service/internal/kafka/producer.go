@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -16,29 +17,50 @@ type Producer struct {
 	logger   zerolog.Logger
 }
 
-type TransactionDataIngestedEvent struct {
-	EventID           string `json:"event_id"`
-	Timestamp         string `json:"timestamp"`
-	WalletAddress     string `json:"wallet_address"`
-	Chain             string `json:"chain"`
-	DataSource        string `json:"data_source"`
-	TransactionCount  int    `json:"transaction_count"`
-	IngestionJobID    string `json:"ingestion_job_id"`
-	Status            string `json:"status"`
+type Transaction struct {
+	Hash      string    `json:"hash"`
+	From      string    `json:"from"`
+	To        string    `json:"to"`
+	Amount    string    `json:"amount"`
+	Symbol    string    `json:"symbol"`
+	Timestamp time.Time `json:"timestamp"`
+	Type      string    `json:"type"`
 }
 
-func NewProducer(brokers []string, topic string, logger zerolog.Logger) (*Producer, error) {
+type TransactionDataIngestedEvent struct {
+	SchemaVersion string        `json:"schema_version"`
+	EventID       string        `json:"event_id"`
+	WalletAddress string        `json:"wallet_address"`
+	Chain         string        `json:"chain"`
+	Transactions  []Transaction `json:"transactions"`
+}
+
+func NewProducer(ctx context.Context, brokers []string, topic string, logger zerolog.Logger) (*Producer, error) {
+	if len(brokers) == 0 {
+		return nil, fmt.Errorf("at least one broker required")
+	}
+	if topic == "" {
+		return nil, fmt.Errorf("topic required")
+	}
+
 	config := sarama.NewConfig()
 	config.Version = sarama.V3_6_0_0
 	config.Producer.Return.Successes = true
-	config.Producer.RequiredAcks = sarama.WaitForAll
-	config.Producer.Retry.Max = 5
+	config.Producer.RequiredAcks = sarama.WaitForLocal
+	config.Producer.Retry.Max = 3
 	config.Producer.Compression = sarama.CompressionSnappy
+	config.Producer.Idempotent = true
+	config.Producer.MaxMessageBytes = 1000000
 
 	producer, err := sarama.NewSyncProducer(brokers, config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create producer: %w", err)
 	}
+
+	logger.Info().
+		Strs("brokers", brokers).
+		Str("topic", topic).
+		Msg("kafka producer initialized")
 
 	return &Producer{
 		producer: producer,
@@ -48,40 +70,56 @@ func NewProducer(brokers []string, topic string, logger zerolog.Logger) (*Produc
 }
 
 func (p *Producer) PublishTransactionDataIngested(ctx context.Context, event TransactionDataIngestedEvent) error {
+	if event.WalletAddress == "" {
+		return fmt.Errorf("wallet_address is required")
+	}
+	if event.Chain == "" {
+		return fmt.Errorf("chain is required")
+	}
+
 	if event.EventID == "" {
 		event.EventID = uuid.New().String()
 	}
-	if event.Timestamp == "" {
-		event.Timestamp = time.Now().UTC().Format(time.RFC3339)
-	}
-	if event.IngestionJobID == "" {
-		event.IngestionJobID = uuid.New().String()
+	if event.SchemaVersion == "" {
+		event.SchemaVersion = "1.0.0"
 	}
 
+	start := time.Now()
 	data, err := json.Marshal(event)
 	if err != nil {
-		p.logger.Error().Err(err).Msg("marshal kafka event")
-		return err
+		p.logger.Error().Err(err).Msg("marshal kafka event failed")
+		return fmt.Errorf("marshal event: %w", err)
 	}
 
 	msg := &sarama.ProducerMessage{
 		Topic: p.topic,
 		Key:   sarama.StringEncoder(event.WalletAddress),
 		Value: sarama.ByteEncoder(data),
+		Headers: []sarama.RecordHeader{
+			{Key: []byte("event_id"), Value: []byte(event.EventID)},
+			{Key: []byte("schema_version"), Value: []byte(event.SchemaVersion)},
+		},
 	}
 
 	partition, offset, err := p.producer.SendMessage(msg)
 	if err != nil {
-		p.logger.Error().Err(err).Str("topic", p.topic).Msg("send kafka message")
-		return err
+		p.logger.Error().
+			Err(err).
+			Str("topic", p.topic).
+			Str("wallet", event.WalletAddress).
+			Msg("send kafka message failed")
+		return fmt.Errorf("send message: %w", err)
 	}
 
-	p.logger.Debug().
+	duration := time.Since(start)
+	p.logger.Info().
 		Str("event_id", event.EventID).
 		Str("wallet", event.WalletAddress).
 		Str("chain", event.Chain).
+		Int("transaction_count", len(event.Transactions)).
 		Int32("partition", partition).
 		Int64("offset", offset).
+		Dur("duration_ms", duration).
 		Msg("published transaction data ingested event")
 
 	return nil

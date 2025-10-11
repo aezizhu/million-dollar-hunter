@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/alchemy"
@@ -14,6 +15,7 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/ratelimit"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/repository"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/solana"
+	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/transformer"
 	"github.com/go-redis/redis/v8"
 	"github.com/rs/zerolog"
 )
@@ -44,12 +46,11 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 	var producer *kafka.Producer
 	if cfg.KafkaEnabled {
 		brokers := strings.Split(cfg.KafkaBrokers, ",")
-		p, err := kafka.NewProducer(brokers, cfg.KafkaTopicTxIngested, logger)
+		p, err := kafka.NewProducer(ctx, brokers, cfg.KafkaTopicTxIngested, logger)
 		if err != nil {
-			logger.Warn().Err(err).Msg("kafka producer init failed, continuing without kafka")
+			logger.Error().Err(err).Msg("kafka producer init failed, continuing without kafka")
 		} else {
 			producer = p
-			logger.Info().Strs("brokers", brokers).Str("topic", cfg.KafkaTopicTxIngested).Msg("kafka producer initialized")
 		}
 	}
 
@@ -94,9 +95,7 @@ func (s *Service) handleJob(ctx context.Context, job models.IngestionJob) error 
 		return s.handleSolanaJob(ctx, job)
 	}
 
-	var txCount int
-	var hadError bool
-	var dataSource string
+	var allTransactions []kafka.Transaction
 
 	transfers, err := s.alc.GetAssetTransfersAll(ctx, struct {
 		FromBlock    string   `json:"fromBlock,omitempty"`
@@ -115,56 +114,53 @@ func (s *Service) handleJob(ctx context.Context, job models.IngestionJob) error 
 	})
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Str("chain", job.Chain).Msg("alchemy transfers failed")
-		hadError = true
 	} else {
-		txCount = len(transfers)
-		dataSource = "alchemy"
-	}
+		s.logger.Info().Int("count", len(transfers)).Str("wallet", job.Wallet).Msg("fetched alchemy transfers")
+		if len(transfers) > 0 {
+			if err := s.storeRaw(ctx, "alchemy", job.Wallet, job.Chain, transfers); err != nil {
+				s.logger.Error().Err(err).Msg("store alchemy transfers failed")
+			}
 
-	if len(transfers) > 0 {
-		if err := s.storeRaw(ctx, "alchemy", job.Wallet, job.Chain, transfers); err != nil {
-			s.logger.Error().Err(err).Msg("store transfers")
-			hadError = true
+			txs, err := transformer.TransformAlchemyTransfers(transfers)
+			if err != nil {
+				s.logger.Error().Err(err).Msg("transform alchemy transfers failed")
+			} else {
+				allTransactions = append(allTransactions, txs...)
+			}
 		}
 	}
 
 	bal, err := s.mor.GetWalletTokenBalancesPrice(ctx, job.Wallet, job.Chain)
-	if err == nil {
+	if err != nil {
+		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("moralis balances failed")
+	} else if bal != nil {
 		if err := s.storeRaw(ctx, "moralis", job.Wallet, job.Chain, bal); err != nil {
-			s.logger.Error().Err(err).Msg("store balances")
-			hadError = true
-		}
-		if dataSource == "" {
-			dataSource = "moralis"
+			s.logger.Error().Err(err).Msg("store moralis balances failed")
 		}
 	}
 
 	if s.producer != nil {
-		status := "completed"
-		if hadError {
-			status = "partial"
-		}
-		if txCount == 0 && hadError {
-			status = "failed"
-		}
 		event := kafka.TransactionDataIngestedEvent{
-			WalletAddress:    job.Wallet,
-			Chain:            job.Chain,
-			DataSource:       dataSource,
-			TransactionCount: txCount,
-			Status:           status,
+			WalletAddress: job.Wallet,
+			Chain:         job.Chain,
+			Transactions:  allTransactions,
 		}
 		if err := s.producer.PublishTransactionDataIngested(ctx, event); err != nil {
-			s.logger.Error().Err(err).Msg("publish kafka event")
+			s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("publish kafka event failed")
+			return err
 		}
+		s.logger.Info().
+			Str("wallet", job.Wallet).
+			Str("chain", job.Chain).
+			Int("transaction_count", len(allTransactions)).
+			Msg("published kafka event successfully")
 	}
 
 	return nil
 }
 
 func (s *Service) handleSolanaJob(ctx context.Context, job models.IngestionJob) error {
-	var txCount int
-	var hadError bool
+	var allTransactions []kafka.Transaction
 
 	txs, err := s.sol.GetTransactions(ctx, solana.GetTransactionsParams{
 		Address: job.Wallet,
@@ -172,74 +168,82 @@ func (s *Service) handleSolanaJob(ctx context.Context, job models.IngestionJob) 
 	})
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("solana transactions failed")
-		hadError = true
 	} else {
-		txCount = len(txs)
-	}
+		s.logger.Info().Int("count", len(txs)).Str("wallet", job.Wallet).Msg("fetched solana transactions")
+		if len(txs) > 0 {
+			if err := s.storeRaw(ctx, "solana", job.Wallet, job.Chain, txs); err != nil {
+				s.logger.Error().Err(err).Msg("store solana transactions failed")
+			}
 
-	if len(txs) > 0 {
-		if err := s.storeRaw(ctx, "solana", job.Wallet, job.Chain, txs); err != nil {
-			s.logger.Error().Err(err).Msg("store solana transactions")
-			hadError = true
+			transformed, err := transformer.TransformSolanaTransactions(txs)
+			if err != nil {
+				s.logger.Error().Err(err).Msg("transform solana transactions failed")
+			} else {
+				allTransactions = append(allTransactions, transformed...)
+			}
 		}
 	}
 
 	balances, err := s.sol.GetTokenBalances(ctx, job.Wallet)
 	if err != nil {
 		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("solana balances failed")
-		hadError = true
-	}
-
-	if len(balances) > 0 {
+	} else if len(balances) > 0 {
 		if err := s.storeRaw(ctx, "solana_balances", job.Wallet, job.Chain, balances); err != nil {
-			s.logger.Error().Err(err).Msg("store solana balances")
-			hadError = true
+			s.logger.Error().Err(err).Msg("store solana balances failed")
 		}
 	}
 
 	bal, err := s.mor.GetWalletTokenBalancesPrice(ctx, job.Wallet, job.Chain)
-	if err == nil {
+	if err != nil {
+		s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("moralis balances failed")
+	} else if bal != nil {
 		if err := s.storeRaw(ctx, "moralis", job.Wallet, job.Chain, bal); err != nil {
-			s.logger.Error().Err(err).Msg("store moralis balances")
-			hadError = true
+			s.logger.Error().Err(err).Msg("store moralis balances failed")
 		}
 	}
 
 	if s.producer != nil {
-		status := "completed"
-		if hadError {
-			status = "partial"
-		}
-		if txCount == 0 && hadError {
-			status = "failed"
-		}
 		event := kafka.TransactionDataIngestedEvent{
-			WalletAddress:    job.Wallet,
-			Chain:            job.Chain,
-			DataSource:       "solana",
-			TransactionCount: txCount,
-			Status:           status,
+			WalletAddress: job.Wallet,
+			Chain:         job.Chain,
+			Transactions:  allTransactions,
 		}
 		if err := s.producer.PublishTransactionDataIngested(ctx, event); err != nil {
-			s.logger.Error().Err(err).Msg("publish kafka event")
+			s.logger.Error().Err(err).Str("wallet", job.Wallet).Msg("publish kafka event failed")
+			return err
 		}
+		s.logger.Info().
+			Str("wallet", job.Wallet).
+			Str("chain", job.Chain).
+			Int("transaction_count", len(allTransactions)).
+			Msg("published kafka event successfully")
 	}
 
 	return nil
 }
 
 func (s *Service) storeRaw(ctx context.Context, source, wallet, chain string, data any) error {
-	b, _ := json.Marshal(data)
-	_, err := s.db.Pool.Exec(ctx, `
-INSERT INTO raw_transactions (source_api, wallet_address, chain, data)
-SELECT $1, $2, $3, $4
-`, source, wallet, chain, b)
+	b, err := json.Marshal(data)
 	if err != nil {
-		_, err2 := s.db.Pool.Exec(ctx, `
-INSERT INTO raw_balances (wallet_address, chain, data)
-SELECT $1, $2, $3
-`, wallet, chain, b)
-		return err2
+		return fmt.Errorf("marshal data: %w", err)
 	}
+
+	var storeErr error
+	if source == "alchemy" || source == "solana" {
+		_, storeErr = s.db.Pool.Exec(ctx, `
+INSERT INTO raw_transactions (source_api, wallet_address, chain, data)
+VALUES ($1, $2, $3, $4)
+`, source, wallet, chain, b)
+	} else {
+		_, storeErr = s.db.Pool.Exec(ctx, `
+INSERT INTO raw_balances (wallet_address, chain, data)
+VALUES ($1, $2, $3)
+`, wallet, chain, b)
+	}
+
+	if storeErr != nil {
+		return fmt.Errorf("store raw data (source=%s): %w", source, storeErr)
+	}
+
 	return nil
 }

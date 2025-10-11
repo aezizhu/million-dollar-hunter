@@ -39,6 +39,11 @@ services:
       POSTGRES_DB: ingestion
     volumes:
       - ingestion_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ingestion"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
@@ -55,17 +60,34 @@ services:
       KAFKA_BROKERS: "kafka:29092"
       KAFKA_TOPIC_TX_INGESTED: "TransactionDataIngested"
       HTTP_PORT: "8090"
-      ALCHEMY_BASE_URL: "${ALCHEMY_BASE_URL}"
-      ALCHEMY_API_KEY: "${ALCHEMY_API_KEY}"
-      MORALIS_BASE_URL: "${MORALIS_BASE_URL}"
-      MORALIS_API_KEY: "${MORALIS_API_KEY}"
+      ALCHEMY_BASE_URL: "${ALCHEMY_BASE_URL:-https://api.alchemy.com}"
+      ALCHEMY_API_KEY: "${ALCHEMY_API_KEY:-}"
+      MORALIS_BASE_URL: "${MORALIS_BASE_URL:-https://deep-index.moralis.io/api/v2.2}"
+      MORALIS_API_KEY: "${MORALIS_API_KEY:-}"
       USE_API_MOCKS: "false"
     depends_on:
-      - kafka
-      - ingestion-postgres
-      - redis
+      kafka:
+        condition: service_started
+      ingestion-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     ports:
       - "8090:8090"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8090/healthz", "||", "exit", "1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
 
   portfolio-service:
     build:
