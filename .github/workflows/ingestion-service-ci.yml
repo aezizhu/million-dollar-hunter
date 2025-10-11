@@ -95,6 +95,7 @@ jobs:
 
     - name: Generate coverage report
       run: go tool cover -func=coverage.out
+      continue-on-error: true
 
     - name: Run lint (if configured)
       run: |
