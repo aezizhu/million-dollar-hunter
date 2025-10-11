@@ -1,54 +1,56 @@
 package clients
 
 import (
-	"context"
-	"fmt"
-	"time"
-
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 type GRPCClients struct {
-	PortfolioConn   *grpc.ClientConn
-	MarketDataConn  *grpc.ClientConn
+	PortfolioConn  *grpc.ClientConn
+	MarketDataConn *grpc.ClientConn
 }
 
-func NewGRPCClients(portfolioAddr, marketDataAddr string) (*GRPCClients, error) {
+func NewGRPCClients(portfolioAddr, marketDataAddr string, logger zerolog.Logger) *GRPCClients {
 	clients := &GRPCClients{}
-	
+
 	if portfolioAddr != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		
-		conn, err := grpc.DialContext(ctx, portfolioAddr,
+		conn, err := grpc.NewClient(portfolioAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to connect to portfolio service at %s: %w", portfolioAddr, err)
+			logger.Warn().Err(err).Str("addr", portfolioAddr).Msg("Failed to create portfolio service client")
+		} else {
+			clients.PortfolioConn = conn
+			logger.Info().Str("addr", portfolioAddr).Msg("Portfolio service client initialized (non-blocking)")
+			
+			go func() {
+				state := conn.GetState()
+				conn.Connect()
+				logger.Debug().Str("state", state.String()).Msg("Portfolio service connection state")
+			}()
 		}
-		clients.PortfolioConn = conn
 	}
-	
+
 	if marketDataAddr != "" {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		
-		conn, err := grpc.DialContext(ctx, marketDataAddr,
+		conn, err := grpc.NewClient(marketDataAddr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
-			if clients.PortfolioConn != nil {
-				clients.PortfolioConn.Close()
-			}
-			return nil, fmt.Errorf("failed to connect to market data service at %s: %w", marketDataAddr, err)
+			logger.Warn().Err(err).Str("addr", marketDataAddr).Msg("Failed to create market data service client")
+		} else {
+			clients.MarketDataConn = conn
+			logger.Info().Str("addr", marketDataAddr).Msg("Market data service client initialized (non-blocking)")
+			
+			go func() {
+				state := conn.GetState()
+				conn.Connect()
+				logger.Debug().Str("state", state.String()).Msg("Market data service connection state")
+			}()
 		}
-		clients.MarketDataConn = conn
 	}
-	
-	return clients, nil
+
+	return clients
 }
 
 func (c *GRPCClients) Close() {

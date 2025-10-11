@@ -4,31 +4,31 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 )
 
-func ListPortfolios(portfolioConn *grpc.ClientConn) gin.HandlerFunc {
+func ListPortfolios(portfolioConn *grpc.ClientConn, logger zerolog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"items":    []interface{}{},
-			"page":     1,
-			"pageSize": 20,
-			"total":    0,
-			"message":  "Portfolio listing requires user-wallet association implementation in portfolio-service",
+		logger.Info().Msg("ListPortfolios endpoint not yet implemented")
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"error":   "not_implemented",
+			"message": "Portfolio listing requires user-wallet association implementation in portfolio-service",
 		})
 	}
 }
 
 type AddWalletRequest struct {
 	Address  string `json:"address" binding:"required"`
-	Chain    string `json:"chain" binding:"required"`
+	Chain    string `json:"chain" binding:"required,oneof=ethereum bsc polygon arbitrum optimism solana"`
 	Nickname string `json:"nickname"`
 }
 
-func AddWallet(portfolioConn *grpc.ClientConn) gin.HandlerFunc {
+func AddWallet(portfolioConn *grpc.ClientConn, logger zerolog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req AddWalletRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
+			logger.Warn().Err(err).Msg("Invalid AddWallet request")
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error":   "validation_error",
 				"message": err.Error(),
@@ -36,9 +36,9 @@ func AddWallet(portfolioConn *grpc.ClientConn) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusAccepted, gin.H{
-			"jobId":   "00000000-0000-0000-0000-000000000000",
-			"status":  "queued",
+		logger.Info().Str("address", req.Address).Str("chain", req.Chain).Msg("AddWallet endpoint not yet implemented")
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"error":   "not_implemented",
 			"message": "Wallet tracking requires ingestion service integration",
 		})
 	}

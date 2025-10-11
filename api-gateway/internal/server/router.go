@@ -70,16 +70,8 @@ func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Durat
 	return l.rl.Allow(context.Background(), key)
 }
 
-func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) {
-	grpcClients, err := clients.NewGRPCClients(cfg.PortfolioServiceURL, cfg.MarketDataServiceURL)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to initialize gRPC clients, services will be unavailable")
-	} else {
-		logger.Info().
-			Str("portfolio_service", cfg.PortfolioServiceURL).
-			Str("market_data_service", cfg.MarketDataServiceURL).
-			Msg("gRPC clients initialized successfully")
-	}
+func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) *clients.GRPCClients {
+	grpcClients := clients.NewGRPCClients(cfg.PortfolioServiceURL, cfg.MarketDataServiceURL, logger)
 
 	httpMetrics := observability.NewHTTPMetrics(reg, cfg.PrometheusNamespace)
 	r.Use(func(c *gin.Context) {
@@ -142,10 +134,12 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		marketDataConn = grpcClients.MarketDataConn
 	}
 
-	api.GET("/portfolios", handlers.ListPortfolios(portfolioConn))
-	api.POST("/portfolios", handlers.AddWallet(portfolioConn))
-	api.GET("/wallets/:address", handlers.GetWallet(portfolioConn))
-	api.GET("/wallets/:address/transactions", handlers.GetTransactions(portfolioConn))
-	api.GET("/tokens/:tokenAddress/holders", handlers.TopHolders(marketDataConn))
-	api.GET("/export/wallet/:address", handlers.ExportWallet(portfolioConn))
+	api.GET("/portfolios", handlers.ListPortfolios(portfolioConn, logger))
+	api.POST("/portfolios", handlers.AddWallet(portfolioConn, logger))
+	api.GET("/wallets/:address", handlers.GetWallet(portfolioConn, logger))
+	api.GET("/wallets/:address/transactions", handlers.GetTransactions(portfolioConn, logger))
+	api.GET("/tokens/:tokenAddress/holders", handlers.TopHolders(marketDataConn, logger))
+	api.GET("/export/wallet/:address", handlers.ExportWallet(portfolioConn, logger))
+	
+	return grpcClients
 }

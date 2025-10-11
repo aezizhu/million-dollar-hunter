@@ -39,7 +39,10 @@ func main() {
 	engine := gin.New()
 	engine.Use(gin.Recovery())
 
-	server.Register(engine, cfg, logger, reg)
+	grpcClients := server.Register(engine, cfg, logger, reg)
+	if grpcClients != nil {
+		defer grpcClients.Close()
+	}
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
