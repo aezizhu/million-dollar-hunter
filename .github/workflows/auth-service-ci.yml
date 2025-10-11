@@ -62,6 +62,7 @@ jobs:
         DATABASE_URL: postgres://postgres:postgres@localhost:5432/auth_test?sslmode=disable
         JWT_SIGNING_KEY: test-key-for-ci
         ENABLE_MULTI_USER: "false"
+        GOWORK: "off"
       run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
     - name: Generate coverage report
@@ -95,6 +96,8 @@ jobs:
 
     - name: Run linter
       working-directory: services/auth-service
+      env:
+        GOWORK: "off"
       run: golangci-lint run ./...
 
   build:
@@ -117,6 +120,8 @@ jobs:
 
     - name: Build binary
       working-directory: services/auth-service
+      env:
+        GOWORK: "off"
       run: go build -v -o bin/auth-service ./cmd/auth-service
 
     - name: Verify binary
@@ -144,12 +149,16 @@ jobs:
 
     - name: Run Gosec Security Scanner
       working-directory: services/auth-service
+      env:
+        GOWORK: "off"
       run: |
         go install github.com/securego/gosec/v2/cmd/gosec@latest
         gosec -fmt=json -out=gosec-results.json -no-fail ./... || true
 
     - name: Check for known vulnerabilities
       working-directory: services/auth-service
+      env:
+        GOWORK: "off"
       run: |
         go install golang.org/x/vuln/cmd/govulncheck@latest
         govulncheck ./...
