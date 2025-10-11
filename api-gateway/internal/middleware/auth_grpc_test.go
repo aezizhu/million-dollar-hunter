@@ -163,6 +163,38 @@ func TestAuth_GRPCMode_NilConn_FallsBackToLocal(t *testing.T) {
 		t.Fatalf("expected 401 for invalid local jwt, got %d", w.Code)
 	}
 }
+func TestAuth_GRPCMode_FallbackToLocal_MVPGate_Succeeds(t *testing.T) {
+	lis, srv := startBufServer(&fakeAuthServer{valid: true, delay: 50 * time.Millisecond})
+	defer srv.Stop()
+
+	conn, err := dialBufConn(lis)
+	if err != nil {
+		t.Fatalf("dial err: %v", err)
+	}
+	defer conn.Close()
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	cfg := config.Config{
+		AuthValidateMode:        "grpc",
+		JWTAudience:             "aud",
+		AuthGRPCTimeoutMs:       10,
+		AuthGRPCFallbackToLocal: true,
+		AuthMode:                "mvp-gate",
+	}
+	r.Use(Auth(cfg, conn))
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Authorization", "Bearer 123456789abcdef")
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with fallback to local mvp-gate, got %d", w.Code)
+	}
+}
+
 
 package middleware
 

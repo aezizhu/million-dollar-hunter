@@ -17,6 +17,7 @@ type Config struct {
 	AuthValidateMode        string
 	AuthGRPCAddr            string
 	AuthGRPCTimeoutMs       int
+	AuthGRPCFallbackToLocal bool
 	JWTSecret               string
 	JWTAudience             string
 	FrontendURL             string
@@ -70,6 +71,7 @@ func Load() Config {
 		AuthValidateMode:        getenv("AUTH_VALIDATE_MODE", "local"),
 		AuthGRPCAddr:            os.Getenv("AUTH_GRPC_ADDR"),
 		AuthGRPCTimeoutMs:       getenvInt("AUTH_GRPC_TIMEOUT_MS", 2000),
+		AuthGRPCFallbackToLocal: getenvBool("AUTH_GRPC_FALLBACK_TO_LOCAL", false),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		JWTAudience:             os.Getenv("JWT_AUDIENCE"),
 		FrontendURL:             getenv("FRONTEND_URL", "*"),

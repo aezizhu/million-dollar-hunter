@@ -36,18 +36,21 @@ func Auth(cfg config.Config, authConn *grpc.ClientConn) gin.HandlerFunc {
 				ExpectedAud: cfg.JWTAudience,
 			})
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+				if !(cfg.AuthGRPCFallbackToLocal && (cfg.JWTSecret != "" || cfg.AuthMode == "mvp-gate")) {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+					return
+				}
+			} else {
+				if !resp.GetValid() {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+					return
+				}
+				if uid := resp.GetUserId(); uid != "" {
+					c.Set("user_id", uid)
+				}
+				c.Next()
 				return
 			}
-			if !resp.GetValid() {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
-				return
-			}
-			if uid := resp.GetUserId(); uid != "" {
-				c.Set("user_id", uid)
-			}
-			c.Next()
-			return
 		}
 
 		if cfg.JWTSecret != "" {
