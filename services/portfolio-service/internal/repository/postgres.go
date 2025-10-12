@@ -147,9 +147,11 @@ func (r *Repo) UpsertFromIngest(ctx context.Context, payload []byte) error {
 		return fmt.Errorf("unmarshal event: %w", err)
 	}
 
+
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
+
 	}
 	defer tx.Rollback(ctx)
 
@@ -164,6 +166,20 @@ func (r *Repo) UpsertFromIngest(ctx context.Context, payload []byte) error {
 
 	return tx.Commit(ctx)
 }
+type TokenBalance struct {
+	WalletID     string
+	Chain        string
+	TokenAddress string
+	Balance      float64
+}
+
+type AssetSnapshotRow struct {
+	WalletID     string
+	TokenAddress string
+	Balance      float64
+	USDValue     float64
+}
+
 
 func (r *Repo) upsertWallet(ctx context.Context, tx pgx.Tx, address, chain string) (uuid.UUID, error) {
 	var walletID uuid.UUID
@@ -251,6 +267,85 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 	}
 
 	return portfolio, rows.Err()
+}
+func (r *Repo) GetCurrentTokenBalances(ctx context.Context, walletIDOrAddr string) ([]TokenBalance, string, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var walletID, chain string
+	if err := r.db.QueryRow(ctx, `SELECT id, chain FROM wallets WHERE id = $1 OR address = $1 LIMIT 1`, walletIDOrAddr).Scan(&walletID, &chain); err != nil {
+		return nil, "", "", err
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT 
+			t.token_address,
+			SUM(CASE 
+				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+				ELSE 0
+			END) as current_balance
+		FROM transactions_view t
+		WHERE t.wallet_id = $1
+			AND t.token_address IS NOT NULL 
+			AND t.token_address != ''
+		GROUP BY t.token_address
+		HAVING SUM(CASE 
+			WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+			WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+			ELSE 0
+		END) > 0
+	`, walletID)
+	if err != nil {
+		return nil, "", "", err
+	}
+	defer rows.Close()
+
+	var out []TokenBalance
+	for rows.Next() {
+		var addr string
+		var bal float64
+		if err := rows.Scan(&addr, &bal); err != nil {
+			return nil, "", "", err
+		}
+		out = append(out, TokenBalance{
+			WalletID:     walletID,
+			Chain:        chain,
+			TokenAddress: addr,
+			Balance:      bal,
+		})
+	}
+	return out, walletID, chain, rows.Err()
+}
+
+
+func (r *Repo) InsertAssetSnapshots(ctx context.Context, snapshots []AssetSnapshotRow) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	batch := &pgx.Batch{}
+	now := time.Now()
+	for _, s := range snapshots {
+		batch.Queue(`INSERT INTO asset_snapshots (wallet_id, token_address, ts, balance, usd_value) VALUES ($1,$2,$3,$4,$5)`,
+			s.WalletID, s.TokenAddress, now, s.Balance, s.USDValue)
+	}
+	type batchSender interface {
+		SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
+	}
+	sb, ok := r.db.(batchSender)
+	if !ok {
+		for range snapshots {
+		}
+		return nil
+	}
+	br := sb.SendBatch(ctx, batch)
+	defer br.Close()
+	for range snapshots {
+		if _, err := br.Exec(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type WalletSummary struct {

@@ -23,4 +23,8 @@ type Config struct {
 	// Observability configuration - reserved for future instrumentation
 	OTELEndpoint          string        `env:"OTEL_EXPORTER_OTLP_ENDPOINT" envDefault:""`
 	PrometheusNamespace   string        `env:"PROMETHEUS_NAMESPACE" envDefault:"portfolio_service"`
+
+	MarketDataGRPCAddr   string        `env:"MARKET_DATA_GRPC_ADDR" envDefault:"localhost:50051"`
+	MarketDataTimeout    time.Duration `env:"MARKET_DATA_TIMEOUT" envDefault:"2s"`
+	MarketDataTLSEnabled bool          `env:"MARKET_DATA_TLS_ENABLED" envDefault:"false"`
 }

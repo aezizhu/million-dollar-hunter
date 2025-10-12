@@ -16,6 +16,8 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/kafka"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
+	mdclients "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/clients"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/service"
 )
 
@@ -64,7 +66,14 @@ func main() {
 	}
 	defer db.Close(context.Background())
 
-	svc := service.New(db, cfg)
+	var mdc ports.MarketDataClient
+	c, err := mdclients.NewMarketDataGRPCClient(cfg.MarketDataGRPCAddr, cfg.MarketDataTimeout, cfg.MarketDataTLSEnabled)
+	if err != nil {
+		mdc = nil
+	} else {
+		mdc = c
+	}
+	svc := service.New(db, cfg, mdc)
 
 	consumer, err := kafka.NewConsumer(cfg, svc)
 	if err != nil {

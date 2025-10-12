@@ -17,6 +17,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -30,20 +31,84 @@ type Repository interface {
 	GetPortfolioByWalletID(ctx context.Context, walletID string) (*repository.Portfolio, error)
 	UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string) (bool, error)
 	UpsertFromIngest(ctx context.Context, payload []byte) error
+	GetCurrentTokenBalances(ctx context.Context, walletIDOrAddr string) ([]repository.TokenBalance, string, string, error)
+	InsertAssetSnapshots(ctx context.Context, snapshots []repository.AssetSnapshotRow) error
 	Close(ctx context.Context)
+}
+
+type noopMarketData struct{}
+
+func (n *noopMarketData) GetTokenPrices(ctx context.Context, tokens []ports.TokenIdentifier) ([]ports.TokenPrice, error) {
+	return []ports.TokenPrice{}, nil
+}
+func (n *noopMarketData) GetTokenPrice(ctx context.Context, token ports.TokenIdentifier) (*ports.TokenPrice, error) {
+	return nil, nil
 }
 
 type PortfolioService struct {
 	repo Repository
 	cfg  config.Config
+	mdc  ports.MarketDataClient
 }
 
-func New(repo Repository, cfg config.Config) *PortfolioService {
-	return &PortfolioService{repo: repo, cfg: cfg}
+func New(repo Repository, cfg config.Config, mdc ports.MarketDataClient) *PortfolioService {
+	if mdc == nil {
+		mdc = &noopMarketData{}
+	}
+	return &PortfolioService{repo: repo, cfg: cfg, mdc: mdc}
 }
 
 func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, raw []byte) error {
-	return s.repo.UpsertFromIngest(ctx, raw)
+	if err := s.repo.UpsertFromIngest(ctx, raw); err != nil {
+		return err
+	}
+	var evt repository.TransactionDataIngestedEvent
+	if err := json.Unmarshal(raw, &evt); err != nil {
+		return nil
+	}
+	balances, walletID, chain, err := s.repo.GetCurrentTokenBalances(ctx, evt.WalletAddress)
+	if err != nil {
+		return nil
+	}
+	tokens := make([]ports.TokenIdentifier, 0, len(balances))
+	seen := map[string]struct{}{}
+	for _, b := range balances {
+		addr := strings.ToLower(b.TokenAddress)
+		if addr == "" {
+			continue
+		}
+		key := chain + ":" + addr
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		tokens = append(tokens, ports.TokenIdentifier{Address: addr, Chain: strings.ToLower(chain)})
+	}
+	priceMap := map[string]float64{}
+	if len(tokens) > 0 {
+		prices, err := s.mdc.GetTokenPrices(ctx, tokens)
+		if err == nil {
+			for _, p := range prices {
+				priceMap[strings.ToLower(p.Chain)+":"+strings.ToLower(p.Address)] = p.USDPrice
+			}
+		}
+	}
+	rows := make([]repository.AssetSnapshotRow, 0, len(balances))
+	for _, b := range balances {
+		key := strings.ToLower(chain) + ":" + strings.ToLower(b.TokenAddress)
+		price := priceMap[key]
+		usd := b.Balance * price
+		rows = append(rows, repository.AssetSnapshotRow{
+			WalletID:     walletID,
+			TokenAddress: b.TokenAddress,
+			Balance:      b.Balance,
+			USDValue:     usd,
+		})
+	}
+	if len(rows) > 0 {
+		_ = s.repo.InsertAssetSnapshots(ctx, rows)
+	}
+	return nil
 }
 
 func (s *PortfolioService) GetPortfolio(ctx context.Context, req *pb.GetPortfolioRequest) (*pb.GetPortfolioResponse, error) {
