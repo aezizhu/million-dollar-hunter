@@ -1,3 +1,4 @@
+// Package auth provides utility functions for authentication validation.
 package auth
 
 import (
@@ -19,13 +20,13 @@ func CheckPasswordHash(pw, hash string) error {
 }
 
 func ValidatePasswordPolicy(pw string) error {
-	min := 12
+	minLength := 12
 	if v := os.Getenv("PASSWORD_MIN_LENGTH"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			min = n
+			minLength = n
 		}
 	}
-	if len(pw) < min {
+	if len(pw) < minLength {
 		return errors.New("password too short")
 	}
 	var upper, lower, digit, symbol bool

@@ -58,6 +58,7 @@ func TestParseEnvOverrides(t *testing.T) {
 		t.Fatalf("expected multi-user enabled")
 	}
 }
+
 func TestParseInvalidTTLsFallback(t *testing.T) {
 	os.Setenv("JWT_ACCESS_TTL_MINUTES", "not-a-number")
 	os.Setenv("JWT_REFRESH_TTL_HOURS", "-5")

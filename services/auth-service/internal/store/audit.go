@@ -36,14 +36,14 @@ func (s *PGStore) IsUserLockedOut(ctx context.Context, userID string, maxAttempt
 	const q = `SELECT COUNT(*) FROM auth_audit 
 	           WHERE user_id = $1 AND event_type = 'login_failed'
 	           AND timestamp > NOW() - $2::interval`
-	
+
 	var count int
 	interval := windowDuration.String()
 	err := s.Pool.QueryRow(ctx, q, userID, interval).Scan(&count)
 	if err != nil {
 		return false, err
 	}
-	
+
 	return count >= maxAttempts, nil
 }
 

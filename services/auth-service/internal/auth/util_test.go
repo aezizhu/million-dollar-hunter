@@ -3,7 +3,7 @@ package auth
 import "testing"
 
 func TestValidatePasswordPolicy_AllCases(t *testing.T) {
-	tests := []struct{
+	tests := []struct {
 		name string
 		pw   string
 		ok   bool
@@ -27,7 +27,6 @@ func TestValidatePasswordPolicy_AllCases(t *testing.T) {
 		})
 	}
 }
-
 
 func TestHashAndCheckPassword(t *testing.T) {
 	pw := "ValidPass12!"

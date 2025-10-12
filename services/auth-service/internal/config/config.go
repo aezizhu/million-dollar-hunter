@@ -1,3 +1,4 @@
+// Package config handles environment variable configuration for the auth service.
 package config
 
 import (
@@ -7,14 +8,14 @@ import (
 )
 
 type Config struct {
-	HTTPPort       string
-	GRPCPort       string
-	DatabaseURL    string
-	JWTIssuer      string
-	JWTAudience    string
-	AccessTTL      time.Duration
-	RefreshTTL     time.Duration
-	JWTSigningKey  []byte
+	HTTPPort        string
+	GRPCPort        string
+	DatabaseURL     string
+	JWTIssuer       string
+	JWTAudience     string
+	AccessTTL       time.Duration
+	RefreshTTL      time.Duration
+	JWTSigningKey   []byte
 	EnableMultiUser bool
 }
 

@@ -38,11 +38,11 @@ func (s *Server) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now()
-	if _, err := s.RefreshTokens.GetValidRefreshToken(r.Context(), req.RefreshToken, now); err != nil {
+	if _, getErr := s.RefreshTokens.GetValidRefreshToken(r.Context(), req.RefreshToken, now); getErr != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if err := s.RefreshTokens.RevokeRefreshToken(r.Context(), req.RefreshToken); err != nil {
+	if revokeErr := s.RefreshTokens.RevokeRefreshToken(r.Context(), req.RefreshToken); revokeErr != nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}

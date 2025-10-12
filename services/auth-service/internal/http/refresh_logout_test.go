@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
+	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -44,6 +44,7 @@ func TestRefreshBadJSON(t *testing.T) {
 		t.Fatalf("expected 400")
 	}
 }
+
 func TestRefreshUnauthorized_InvalidJWTSignature(t *testing.T) {
 	mGood := jwtmgr.New("mdh-auth", "mdh-api", time.Minute, 5*time.Minute, []byte("good-key"))
 	mBad := jwtmgr.New("mdh-auth", "mdh-api", time.Minute, 5*time.Minute, []byte("bad-key"))
@@ -61,14 +62,21 @@ func TestRefreshUnauthorized_InvalidJWTSignature(t *testing.T) {
 		t.Fatalf("expected 401 when JWT signature invalid, got %d", w.Code)
 	}
 }
+
 type fakeRefreshRevokeErr struct{ called bool }
+
 func (f *fakeRefreshRevokeErr) CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) (store.RefreshToken, error) {
 	return store.RefreshToken{Token: token, UserID: userID, ExpiresAt: expiresAt}, nil
 }
+
 func (f *fakeRefreshRevokeErr) GetValidRefreshToken(ctx context.Context, token string, now time.Time) (store.RefreshToken, error) {
 	return store.RefreshToken{Token: token, UserID: "u-1", ExpiresAt: now.Add(5 * time.Minute)}, nil
 }
-func (f *fakeRefreshRevokeErr) RevokeRefreshToken(ctx context.Context, token string) error { f.called = true; return assertErr{} }
+
+func (f *fakeRefreshRevokeErr) RevokeRefreshToken(ctx context.Context, token string) error {
+	f.called = true
+	return assertErr{}
+}
 func (f *fakeRefreshRevokeErr) RevokeAllForUser(ctx context.Context, userID string) error { return nil }
 
 func TestRefresh_RevokeErrorReturns401(t *testing.T) {
@@ -85,13 +93,18 @@ func TestRefresh_RevokeErrorReturns401(t *testing.T) {
 }
 
 type fakeRefreshCreateErr struct{}
+
 func (f *fakeRefreshCreateErr) CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) (store.RefreshToken, error) {
 	return store.RefreshToken{}, assertErr{}
 }
+
 func (f *fakeRefreshCreateErr) GetValidRefreshToken(ctx context.Context, token string, now time.Time) (store.RefreshToken, error) {
 	return store.RefreshToken{Token: token, UserID: "u-1", ExpiresAt: now.Add(5 * time.Minute)}, nil
 }
-func (f *fakeRefreshCreateErr) RevokeRefreshToken(ctx context.Context, token string) error { return nil }
+
+func (f *fakeRefreshCreateErr) RevokeRefreshToken(ctx context.Context, token string) error {
+	return nil
+}
 func (f *fakeRefreshCreateErr) RevokeAllForUser(ctx context.Context, userID string) error { return nil }
 
 func TestRefresh_CreatePersistErrorReturns500(t *testing.T) {
@@ -107,16 +120,39 @@ func TestRefresh_CreatePersistErrorReturns500(t *testing.T) {
 	}
 }
 
+type fakeAudit struct {
+	lastEvent string
+	lastUser  *string
+}
 
-type fakeAudit struct{ lastEvent string; lastUser *string }
-func (f *fakeAudit) Log(ctx context.Context, userID *string, event string, ip *string, ua *string) error { f.lastEvent = event; f.lastUser = userID; return nil }
-func (f *fakeAudit) CountRecentLoginFailures(ctx context.Context, userID *string, window time.Duration) (int, error) { return 0, nil }
+func (f *fakeAudit) Log(ctx context.Context, userID *string, event string, ip *string, ua *string) error {
+	f.lastEvent = event
+	f.lastUser = userID
+	return nil
+}
 
-type fakeRevokeAll struct{ user string; called bool }
-func (f *fakeRevokeAll) CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) (store.RefreshToken, error) { return store.RefreshToken{}, nil }
-func (f *fakeRevokeAll) GetValidRefreshToken(ctx context.Context, token string, now time.Time) (store.RefreshToken, error) { return store.RefreshToken{}, assertErr{} }
+func (f *fakeAudit) CountRecentLoginFailures(ctx context.Context, userID *string, window time.Duration) (int, error) {
+	return 0, nil
+}
+
+type fakeRevokeAll struct {
+	user   string
+	called bool
+}
+
+func (f *fakeRevokeAll) CreateRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) (store.RefreshToken, error) {
+	return store.RefreshToken{}, nil
+}
+
+func (f *fakeRevokeAll) GetValidRefreshToken(ctx context.Context, token string, now time.Time) (store.RefreshToken, error) {
+	return store.RefreshToken{}, assertErr{}
+}
 func (f *fakeRevokeAll) RevokeRefreshToken(ctx context.Context, token string) error { return nil }
-func (f *fakeRevokeAll) RevokeAllForUser(ctx context.Context, userID string) error { f.user = userID; f.called = true; return nil }
+func (f *fakeRevokeAll) RevokeAllForUser(ctx context.Context, userID string) error {
+	f.user = userID
+	f.called = true
+	return nil
+}
 
 func TestLogout_WithAuditAndRevokeAll(t *testing.T) {
 	claims := &jwtmgr.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: "u-abc"}}

@@ -16,8 +16,8 @@ func (t tv) ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, 
 }
 
 func TestWithAuthSuccess(t *testing.T) {
-	m := jwtmgr.New("iss","aud", time.Minute, time.Hour, []byte("k"))
-	token, _, _ := m.GenerateToken("u","e@x.com", time.Minute)
+	m := jwtmgr.New("iss", "aud", time.Minute, time.Hour, []byte("k"))
+	token, _, _ := m.GenerateToken("u", "e@x.com", time.Minute)
 	called := false
 	h := WithAuth(tv{m}, "aud", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		called = true
@@ -37,7 +37,7 @@ func TestWithAuthSuccess(t *testing.T) {
 }
 
 func TestWithAuthUnauthorized(t *testing.T) {
-	m := jwtmgr.New("iss","aud", time.Minute, time.Hour, []byte("k"))
+	m := jwtmgr.New("iss", "aud", time.Minute, time.Hour, []byte("k"))
 	h := WithAuth(tv{m}, "aud", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	req := httptest.NewRequest("GET", "/x", nil)
 	w := httptest.NewRecorder()

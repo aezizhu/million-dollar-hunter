@@ -37,8 +37,8 @@ func TestDatabaseConnectivity(t *testing.T) {
 	)
 	require.NoError(t, err)
 	defer func() {
-		if err := testcontainers.TerminateContainer(pgContainer); err != nil {
-			t.Logf("failed to terminate container: %s", err)
+		if termErr := testcontainers.TerminateContainer(pgContainer); termErr != nil {
+			t.Logf("failed to terminate container: %s", termErr)
 		}
 	}()
 
@@ -284,16 +284,16 @@ func TestConcurrentTokenGeneration(t *testing.T) {
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			_, refreshToken, expiresAt, err := jwtManager.GeneratePair(userID, email)
-			if err != nil {
-				errors <- err
+			_, refreshToken, expiresAt, genErr := jwtManager.GeneratePair(userID, email)
+			if genErr != nil {
+				errors <- genErr
 				done <- false
 				return
 			}
 
-			err = s.StoreRefreshToken(ctx, userID, refreshToken, expiresAt)
-			if err != nil {
-				errors <- err
+			storeErr := s.StoreRefreshToken(ctx, userID, refreshToken, expiresAt)
+			if storeErr != nil {
+				errors <- storeErr
 				done <- false
 				return
 			}

@@ -110,7 +110,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := auth.CheckPasswordHash(req.Password, u.PasswordHash); err != nil {
+	if pwErr := auth.CheckPasswordHash(req.Password, u.PasswordHash); pwErr != nil {
 		if s.Audit != nil {
 			_ = s.Audit.Log(r.Context(), &u.ID, "login_failure", nil, nil)
 		}
