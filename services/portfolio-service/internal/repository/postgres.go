@@ -174,14 +174,14 @@ type TokenBalance struct {
 	WalletID     string
 	Chain        string
 	TokenAddress string
-	Balance      float64
+	Balance      string
 }
 
 type AssetSnapshotRow struct {
 	WalletID     string
 	TokenAddress string
-	Balance      float64
-	USDValue     float64
+	Balance      string
+	USDValue     string
 }
 
 
@@ -313,7 +313,7 @@ func (r *Repo) GetCurrentTokenBalances(ctx context.Context, walletIDOrAddr strin
 	var out []TokenBalance
 	for rows.Next() {
 		var addr string
-		var bal float64
+		var bal string
 		if err := rows.Scan(&addr, &bal); err != nil {
 			return nil, "", "", err
 		}
@@ -339,7 +339,7 @@ func (r *Repo) InsertAssetSnapshots(ctx context.Context, snapshots []AssetSnapsh
 	for _, s := range snapshots {
 		batch.Queue(`
 			INSERT INTO asset_snapshots (wallet_id, token_address, ts, ts_bucket, balance, usd_value)
-			VALUES ($1,$2,$3,$4,$5,$6)
+			VALUES ($1,$2,$3,$4,CAST($5 AS NUMERIC),CAST($6 AS NUMERIC))
 			ON CONFLICT (wallet_id, token_address, ts_bucket)
 			DO UPDATE SET balance = EXCLUDED.balance, usd_value = EXCLUDED.usd_value, ts = GREATEST(asset_snapshots.ts, EXCLUDED.ts)
 		`, s.WalletID, s.TokenAddress, now, tsBucket, s.Balance, s.USDValue)
@@ -361,7 +361,7 @@ func (r *Repo) InsertAssetSnapshots(ctx context.Context, snapshots []AssetSnapsh
 	for _, s := range snapshots {
 		if _, err := r.db.Query(ctx, `
 			INSERT INTO asset_snapshots (wallet_id, token_address, ts, ts_bucket, balance, usd_value)
-			VALUES ($1,$2,$3,$4,$5,$6)
+			VALUES ($1,$2,$3,$4,CAST($5 AS NUMERIC),CAST($6 AS NUMERIC))
 			ON CONFLICT (wallet_id, token_address, ts_bucket)
 			DO UPDATE SET balance = EXCLUDED.balance, usd_value = EXCLUDED.usd_value, ts = GREATEST(asset_snapshots.ts, EXCLUDED.ts)
 		`, s.WalletID, s.TokenAddress, now, tsBucket, s.Balance, s.USDValue); err != nil {

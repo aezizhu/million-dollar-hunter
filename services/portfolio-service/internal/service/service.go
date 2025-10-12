@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
@@ -151,12 +152,23 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 	for _, b := range balances {
 		key := strings.ToLower(chain) + ":" + strings.ToLower(b.TokenAddress)
 		price := priceMap[key]
-		usd := b.Balance * price
+		var usdStr string
+		if price == 0 {
+			usdStr = "0"
+		} else {
+			balDec, err := decimal.NewFromString(b.Balance)
+			if err != nil {
+				usdStr = "0"
+			} else {
+				priceDec := decimal.NewFromFloat(price)
+				usdStr = balDec.Mul(priceDec).String()
+			}
+		}
 		rows = append(rows, repository.AssetSnapshotRow{
 			WalletID:     walletID,
 			TokenAddress: b.TokenAddress,
 			Balance:      b.Balance,
-			USDValue:     usd,
+			USDValue:     usdStr,
 		})
 	}
 
