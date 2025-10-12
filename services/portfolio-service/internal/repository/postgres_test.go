@@ -465,3 +465,50 @@ func TestEnrichPortfolioWithPrices_PerAssetParseError(t *testing.T) {
 		assert.Equal(t, expectedTotal, portfolio.TotalUSDValue, "Total should exclude the failed asset")
 	})
 }
+
+func TestInsertAssetSnapshots_FallbackError(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	repo := &Repo{db: mock}
+	snapshots := []AssetSnapshotRow{
+		{WalletID: "wallet1", TokenAddress: "0xabc", Balance: "100.5", USDValue: "200.75"},
+	}
+
+	expectedErr := errors.New("insert failed")
+	mock.ExpectQuery("INSERT INTO asset_snapshots").
+		WillReturnError(expectedErr)
+
+	err = repo.InsertAssetSnapshots(context.Background(), snapshots)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "insert failed")
+}
+
+func TestGetCurrentTokenBalances_ApproveDoesNotAffectBalance(t *testing.T) {
+	mock, err := pgxmock.NewPool()
+	require.NoError(t, err)
+	defer mock.Close()
+
+	repo := &Repo{db: mock}
+
+	mock.ExpectQuery("SELECT id, chain FROM wallets").
+		WithArgs("0xwallet").
+		WillReturnRows(pgxmock.NewRows([]string{"id", "chain"}).
+			AddRow("wallet-uuid", "ethereum"))
+
+	mock.ExpectQuery("SELECT (.+) FROM transactions_view").
+		WithArgs("wallet-uuid").
+		WillReturnRows(pgxmock.NewRows([]string{"token_address", "current_balance"}).
+			AddRow("0xtoken1", "100.5").
+			AddRow("0xtoken2", "50.25"))
+
+	balances, walletID, chain, err := repo.GetCurrentTokenBalances(context.Background(), "0xwallet")
+	require.NoError(t, err)
+	assert.Equal(t, "wallet-uuid", walletID)
+	assert.Equal(t, "ethereum", chain)
+	assert.Len(t, balances, 2)
+	assert.Equal(t, "100.5", balances[0].Balance)
+	assert.Equal(t, "50.25", balances[1].Balance)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
