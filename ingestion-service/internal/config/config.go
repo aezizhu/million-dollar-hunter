@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -19,6 +20,8 @@ type Config struct {
 	UseAPIMocks string
 	HTTPPort    string
 
+	JobQueueSize int
+
 	KafkaBrokers                string
 	KafkaTopicTxIngested        string
 	KafkaTopicWalletTracking    string
@@ -29,6 +32,16 @@ type Config struct {
 func get(k, def string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
+	}
+	return def
+}
+
+func getInt(k string, def int) int {
+	if v := os.Getenv(k); v != "" {
+		var i int
+		if _, err := fmt.Sscanf(v, "%d", &i); err == nil {
+			return i
+		}
 	}
 	return def
 }
@@ -47,6 +60,7 @@ func Load() (*Config, error) {
 		RateLimitMoralisRPS:     get("RATE_LIMIT_MORALIS_RPS", "10"),
 		UseAPIMocks:             get("USE_API_MOCKS", "true"),
 		HTTPPort:                get("HTTP_PORT", "8090"),
+		JobQueueSize:            getInt("JOB_QUEUE_SIZE", 64),
 		KafkaBrokers:            kafkaBrokers,
 		KafkaTopicTxIngested:    get("KAFKA_TOPIC_TX_INGESTED", "TransactionDataIngested"),
 		KafkaTopicWalletTracking: get("KAFKA_TOPIC_WALLET_TRACKING", "WalletTrackingRequested"),

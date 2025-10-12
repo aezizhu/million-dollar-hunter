@@ -66,6 +66,11 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 		}
 	}
 
+	queueSize := cfg.JobQueueSize
+	if queueSize <= 0 {
+		queueSize = 64
+	}
+
 	return &Service{
 		cfg:              cfg,
 		logger:           logger,
@@ -73,7 +78,7 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 		alc:              alc,
 		mor:              mor,
 		sol:              sol,
-		jobch:            make(chan models.IngestionJob, 64),
+		jobch:            make(chan models.IngestionJob, queueSize),
 		producer:         producer,
 		kafkaMetrics:     kafkaMetrics,
 		ingestionMetrics: ingestionMetrics,
@@ -134,6 +139,7 @@ func (s *Service) InitConsumer(ctx context.Context) (*kafka.Consumer, error) {
 		s.cfg.KafkaTopicWalletTracking,
 		s.logger,
 		s,
+		s.kafkaMetrics,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create kafka consumer: %w", err)

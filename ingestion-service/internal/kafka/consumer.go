@@ -5,12 +5,40 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/rs/zerolog"
 )
+
+var (
+	ethereumAddressRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
+	solanaAddressRegex   = regexp.MustCompile(`^[1-9A-HJ-NP-Za-km-z]{32,44}$`)
+)
+
+type ValidationError struct {
+	Field   string
+	Message string
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("validation error for field '%s': %s", e.Field, e.Message)
+}
+
+type TransientError struct {
+	Underlying error
+}
+
+func (e *TransientError) Error() string {
+	return fmt.Sprintf("transient error: %v", e.Underlying)
+}
+
+func (e *TransientError) Unwrap() error {
+	return e.Underlying
+}
 
 type Consumer struct {
 	groupID string
@@ -18,7 +46,14 @@ type Consumer struct {
 	grp     sarama.ConsumerGroup
 	logger  zerolog.Logger
 	handler WalletRequestHandler
+	metrics ConsumerMetrics
 	stopCh  chan struct{}
+	wg      sync.WaitGroup
+}
+
+type ConsumerMetrics interface {
+	ObserveConsume(topic string, err error, start time.Time)
+	ObserveRebalance()
 }
 
 type WalletRequestHandler interface {
@@ -26,6 +61,7 @@ type WalletRequestHandler interface {
 }
 
 type WalletTrackingRequestedEvent struct {
+	SchemaVersion string    `json:"schema_version"`
 	EventID       string    `json:"event_id"`
 	Timestamp     time.Time `json:"timestamp"`
 	UserID        string    `json:"user_id"`
@@ -34,7 +70,16 @@ type WalletTrackingRequestedEvent struct {
 	Nickname      string    `json:"nickname"`
 }
 
-func NewConsumer(ctx context.Context, brokers []string, groupID string, topic string, logger zerolog.Logger, handler WalletRequestHandler) (*Consumer, error) {
+var validChains = map[string]bool{
+	"ethereum": true,
+	"bsc":      true,
+	"polygon":  true,
+	"arbitrum": true,
+	"optimism": true,
+	"solana":   true,
+}
+
+func NewConsumer(ctx context.Context, brokers []string, groupID string, topic string, logger zerolog.Logger, handler WalletRequestHandler, metrics ConsumerMetrics) (*Consumer, error) {
 	if len(brokers) == 0 {
 		return nil, fmt.Errorf("at least one broker required")
 	}
@@ -71,14 +116,19 @@ func NewConsumer(ctx context.Context, brokers []string, groupID string, topic st
 		grp:     grp,
 		logger:  logger,
 		handler: handler,
+		metrics: metrics,
 		stopCh:  make(chan struct{}),
 	}, nil
 }
 
 func (c *Consumer) Run(ctx context.Context) {
+	c.wg.Add(1)
+	defer c.wg.Done()
+
 	handler := &consumerGroupHandler{
 		logger:  c.logger,
 		handler: c.handler,
+		metrics: c.metrics,
 		topic:   c.topic,
 	}
 
@@ -106,6 +156,7 @@ func (c *Consumer) Run(ctx context.Context) {
 func (c *Consumer) Stop() error {
 	c.logger.Info().Msg("stopping kafka consumer")
 	close(c.stopCh)
+	c.wg.Wait()
 	if err := c.grp.Close(); err != nil {
 		return fmt.Errorf("close consumer group: %w", err)
 	}
@@ -115,11 +166,15 @@ func (c *Consumer) Stop() error {
 type consumerGroupHandler struct {
 	logger  zerolog.Logger
 	handler WalletRequestHandler
+	metrics ConsumerMetrics
 	topic   string
 }
 
 func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error {
 	h.logger.Info().Msg("consumer group rebalanced (setup)")
+	if h.metrics != nil {
+		h.metrics.ObserveRebalance()
+	}
 	return nil
 }
 
@@ -130,6 +185,7 @@ func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error {
 
 func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for msg := range claim.Messages() {
+		start := time.Now()
 		ctx := enrichContextWithMessageMetadata(sess.Context(), msg)
 
 		h.logger.Info().
@@ -139,6 +195,11 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 			Msg("processing kafka message")
 
 		err := h.processMessage(ctx, msg)
+		
+		if h.metrics != nil {
+			h.metrics.ObserveConsume(msg.Topic, err, start)
+		}
+		
 		if err != nil {
 			errorContext := fmt.Sprintf("topic=%s partition=%d offset=%d timestamp=%v headers=%v",
 				msg.Topic, msg.Partition, msg.Offset, msg.Timestamp, formatHeaders(msg.Headers))
@@ -176,7 +237,7 @@ func (h *consumerGroupHandler) ConsumeClaim(sess sarama.ConsumerGroupSession, cl
 
 func (h *consumerGroupHandler) processMessage(ctx context.Context, msg *sarama.ConsumerMessage) error {
 	if len(msg.Value) == 0 {
-		return fmt.Errorf("empty payload")
+		return &ValidationError{Field: "payload", Message: "empty payload"}
 	}
 
 	var event WalletTrackingRequestedEvent
@@ -184,19 +245,72 @@ func (h *consumerGroupHandler) processMessage(ctx context.Context, msg *sarama.C
 		return fmt.Errorf("unmarshal event: %w", err)
 	}
 
-	if event.WalletAddress == "" {
-		return fmt.Errorf("wallet_address is required")
-	}
-	if event.Chain == "" {
-		return fmt.Errorf("chain is required")
+	if err := validateEvent(&event); err != nil {
+		payloadPreview := string(msg.Value)
+		if len(payloadPreview) > 100 {
+			payloadPreview = payloadPreview[:100] + "..."
+		}
+		h.logger.Error().
+			Err(err).
+			Str("payload_preview", payloadPreview).
+			Msg("event validation failed")
+		return err
 	}
 
 	return h.handler.HandleWalletTrackingRequest(ctx, event)
 }
 
+func validateEvent(event *WalletTrackingRequestedEvent) error {
+	if event.WalletAddress == "" {
+		return &ValidationError{Field: "wallet_address", Message: "required field is empty"}
+	}
+
+	if event.Chain == "" {
+		return &ValidationError{Field: "chain", Message: "required field is empty"}
+	}
+
+	if !validChains[event.Chain] {
+		return &ValidationError{
+			Field:   "chain",
+			Message: fmt.Sprintf("invalid chain '%s', must be one of: ethereum, bsc, polygon, arbitrum, optimism, solana", event.Chain),
+		}
+	}
+
+	if err := validateWalletAddress(event.WalletAddress, event.Chain); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateWalletAddress(address, chain string) error {
+	switch chain {
+	case "ethereum", "bsc", "polygon", "arbitrum", "optimism":
+		if !ethereumAddressRegex.MatchString(address) {
+			return &ValidationError{
+				Field:   "wallet_address",
+				Message: fmt.Sprintf("invalid EVM address format: must be 42 characters starting with 0x (got: %s)", address),
+			}
+		}
+	case "solana":
+		if !solanaAddressRegex.MatchString(address) {
+			return &ValidationError{
+				Field:   "wallet_address",
+				Message: fmt.Sprintf("invalid Solana address format: must be 32-44 base58 characters (got: %s)", address),
+			}
+		}
+	}
+	return nil
+}
+
 func isPermanentError(err error) bool {
 	if err == nil {
 		return false
+	}
+
+	var valErr *ValidationError
+	if errors.As(err, &valErr) {
+		return true
 	}
 
 	var syntaxErr *json.SyntaxError
@@ -208,12 +322,9 @@ func isPermanentError(err error) bool {
 	permanentKeywords := []string{
 		"unmarshal",
 		"malformed",
-		"empty payload",
 		"invalid format",
 		"invalid json",
 		"bad request",
-		"validation failed",
-		"is required",
 	}
 
 	for _, keyword := range permanentKeywords {
@@ -229,13 +340,20 @@ func isTransientError(err error) bool {
 	if err == nil {
 		return false
 	}
+
+	var transErr *TransientError
+	if errors.As(err, &transErr) {
+		return true
+	}
+
 	errMsg := strings.ToLower(err.Error())
 	return strings.Contains(errMsg, "connection") ||
 		strings.Contains(errMsg, "timeout") ||
 		strings.Contains(errMsg, "temporary") ||
 		strings.Contains(errMsg, "unavailable") ||
 		strings.Contains(errMsg, "deadline exceeded") ||
-		strings.Contains(errMsg, "context deadline")
+		strings.Contains(errMsg, "context deadline") ||
+		strings.Contains(errMsg, "queue full")
 }
 
 type contextKey string
