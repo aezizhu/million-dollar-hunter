@@ -68,14 +68,19 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 	if err := s.repo.UpsertFromIngest(ctx, raw); err != nil {
 		return err
 	}
+
 	var evt repository.TransactionDataIngestedEvent
 	if err := json.Unmarshal(raw, &evt); err != nil {
-		return nil
+		log.Printf("ingest: unmarshal failed err=%v", err)
+		return err
 	}
+
 	balances, walletID, chain, err := s.repo.GetCurrentTokenBalances(ctx, evt.WalletAddress)
 	if err != nil {
+		log.Printf("enrich: GetCurrentTokenBalances failed wallet=%s chain=%s err=%v", evt.WalletAddress, evt.Chain, err)
 		return nil
 	}
+
 	tokensByChain := make(map[string][]string)
 	seen := map[string]struct{}{}
 	lchain := strings.ToLower(chain)
@@ -91,10 +96,13 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 		seen[key] = struct{}{}
 		tokensByChain[lchain] = append(tokensByChain[lchain], addr)
 	}
+
 	priceMap := map[string]float64{}
 	if len(tokensByChain) > 0 && s.marketDataClient != nil {
 		prices, err := s.marketDataClient.GetTokenPrices(ctx, tokensByChain)
-		if err == nil {
+		if err != nil {
+			log.Printf("enrich: GetTokenPrices failed wallet=%s chain=%s tokens=%d err=%v; defaulting price=0", evt.WalletAddress, chain, len(tokensByChain[lchain]), err)
+		} else {
 			for ch, m := range prices {
 				lch := strings.ToLower(ch)
 				for addr, price := range m {
@@ -103,6 +111,7 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 			}
 		}
 	}
+
 	rows := make([]repository.AssetSnapshotRow, 0, len(balances))
 	for _, b := range balances {
 		key := strings.ToLower(chain) + ":" + strings.ToLower(b.TokenAddress)
@@ -115,8 +124,12 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 			USDValue:     usd,
 		})
 	}
+
 	if len(rows) > 0 {
-		_ = s.repo.InsertAssetSnapshots(ctx, rows)
+		if err := s.repo.InsertAssetSnapshots(ctx, rows); err != nil {
+			log.Printf("enrich: InsertAssetSnapshots failed wallet=%s chain=%s rows=%d err=%v", evt.WalletAddress, chain, len(rows), err)
+			return err
+		}
 	}
 	return nil
 }

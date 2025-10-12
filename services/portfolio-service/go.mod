@@ -4,7 +4,6 @@ go 1.24.0
 
 require (
 	github.com/IBM/sarama v1.43.3
-	github.com/aezizhu/million-dollar-hunter/services/market-data-service v0.0.0-00010101000000-000000000000
 	github.com/caarlos0/env/v11 v11.1.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.4
@@ -13,8 +12,6 @@ require (
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.6
 )
-
-replace github.com/aezizhu/million-dollar-hunter/services/market-data-service => ../market-data-service
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -48,5 +45,3 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/aezizhu/million-dollar-hunter/services/market-data-service => ../market-data-service
