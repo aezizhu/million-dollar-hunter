@@ -149,6 +149,7 @@ func TestValidateEvent(t *testing.T) {
 		{
 			name: "valid_ethereum",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
 				Chain:         "ethereum",
 			},
@@ -157,14 +158,36 @@ func TestValidateEvent(t *testing.T) {
 		{
 			name: "valid_solana",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK",
 				Chain:         "solana",
 			},
 			wantErr: false,
 		},
 		{
+			name: "empty_schema_version",
+			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "",
+				WalletAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+				Chain:         "ethereum",
+			},
+			wantErr:     true,
+			errContains: "schema_version",
+		},
+		{
+			name: "unsupported_schema_version",
+			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "2.0.0",
+				WalletAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
+				Chain:         "ethereum",
+			},
+			wantErr:     true,
+			errContains: "unsupported schema version",
+		},
+		{
 			name: "empty_wallet_address",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "",
 				Chain:         "ethereum",
 			},
@@ -174,6 +197,7 @@ func TestValidateEvent(t *testing.T) {
 		{
 			name: "empty_chain",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
 				Chain:         "",
 			},
@@ -183,6 +207,7 @@ func TestValidateEvent(t *testing.T) {
 		{
 			name: "invalid_chain",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
 				Chain:         "bitcoin",
 			},
@@ -192,6 +217,7 @@ func TestValidateEvent(t *testing.T) {
 		{
 			name: "invalid_ethereum_address_too_short",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "0x123",
 				Chain:         "ethereum",
 			},
@@ -201,6 +227,7 @@ func TestValidateEvent(t *testing.T) {
 		{
 			name: "invalid_ethereum_address_no_0x",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
 				Chain:         "ethereum",
 			},
@@ -210,6 +237,7 @@ func TestValidateEvent(t *testing.T) {
 		{
 			name: "invalid_solana_address",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "invalid",
 				Chain:         "solana",
 			},
@@ -219,6 +247,7 @@ func TestValidateEvent(t *testing.T) {
 		{
 			name: "uppercase_chain_rejected",
 			event: &WalletTrackingRequestedEvent{
+				SchemaVersion: "1.0.0",
 				WalletAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0",
 				Chain:         "ETHEREUM",
 			},

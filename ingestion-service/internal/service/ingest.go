@@ -95,7 +95,9 @@ func (s *Service) Enqueue(job models.IngestionJob) error {
 			Str("chain", job.Chain).
 			Int("queue_depth", len(s.jobch)).
 			Msg("job queue full, rejecting job")
-		return fmt.Errorf("job queue full (depth: %d/%d)", len(s.jobch), cap(s.jobch))
+		return &kafka.TransientError{
+			Underlying: fmt.Errorf("job queue at capacity: %d/%d", len(s.jobch), cap(s.jobch)),
+		}
 	}
 }
 

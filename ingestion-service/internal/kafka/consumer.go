@@ -16,7 +16,7 @@ import (
 
 var (
 	ethereumAddressRegex = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
-	solanaAddressRegex   = regexp.MustCompile(`^[1-9A-HJ-NP-Za-km-z]{32,44}$`)
+	solanaAddressRegex   = regexp.MustCompile(`^[1-9A-HJ-NP-Za-km-z]{43,44}$`)
 )
 
 type ValidationError struct {
@@ -261,6 +261,16 @@ func (h *consumerGroupHandler) processMessage(ctx context.Context, msg *sarama.C
 }
 
 func validateEvent(event *WalletTrackingRequestedEvent) error {
+	if event.SchemaVersion == "" {
+		return &ValidationError{Field: "schema_version", Message: "required field is empty"}
+	}
+	if event.SchemaVersion != "1.0.0" {
+		return &ValidationError{
+			Field:   "schema_version",
+			Message: fmt.Sprintf("unsupported schema version '%s', expected '1.0.0'", event.SchemaVersion),
+		}
+	}
+
 	if event.WalletAddress == "" {
 		return &ValidationError{Field: "wallet_address", Message: "required field is empty"}
 	}
