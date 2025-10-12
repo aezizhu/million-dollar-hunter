@@ -66,6 +66,11 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 		}
 	}
 
+	queueSize := cfg.JobQueueSize
+	if queueSize <= 0 {
+		queueSize = 64
+	}
+
 	return &Service{
 		cfg:              cfg,
 		logger:           logger,
@@ -73,7 +78,7 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 		alc:              alc,
 		mor:              mor,
 		sol:              sol,
-		jobch:            make(chan models.IngestionJob, 64),
+		jobch:            make(chan models.IngestionJob, queueSize),
 		producer:         producer,
 		kafkaMetrics:     kafkaMetrics,
 		ingestionMetrics: ingestionMetrics,
@@ -90,8 +95,58 @@ func (s *Service) Enqueue(job models.IngestionJob) error {
 			Str("chain", job.Chain).
 			Int("queue_depth", len(s.jobch)).
 			Msg("job queue full, rejecting job")
-		return fmt.Errorf("job queue full (depth: %d/%d)", len(s.jobch), cap(s.jobch))
+		return &kafka.TransientError{
+			Underlying: fmt.Errorf("job queue at capacity: %d/%d", len(s.jobch), cap(s.jobch)),
+		}
 	}
+}
+
+func (s *Service) HandleWalletTrackingRequest(ctx context.Context, event kafka.WalletTrackingRequestedEvent) error {
+	s.logger.Info().
+		Str("wallet_address", event.WalletAddress).
+		Str("chain", event.Chain).
+		Str("event_id", event.EventID).
+		Str("user_id", event.UserID).
+		Str("nickname", event.Nickname).
+		Msg("processing wallet tracking request")
+
+	job := models.IngestionJob{
+		Wallet: event.WalletAddress,
+		Chain:  event.Chain,
+	}
+
+	if err := s.Enqueue(job); err != nil {
+		s.logger.Error().
+			Err(err).
+			Str("wallet_address", event.WalletAddress).
+			Str("chain", event.Chain).
+			Msg("failed to enqueue ingestion job")
+		return fmt.Errorf("enqueue job: %w", err)
+	}
+
+	s.logger.Info().
+		Str("wallet_address", event.WalletAddress).
+		Str("chain", event.Chain).
+		Msg("wallet tracking request enqueued successfully")
+
+	return nil
+}
+
+func (s *Service) InitConsumer(ctx context.Context) (*kafka.Consumer, error) {
+	brokers := strings.Split(s.cfg.KafkaBrokers, ",")
+	consumer, err := kafka.NewConsumer(
+		ctx,
+		brokers,
+		s.cfg.KafkaConsumerGroupID,
+		s.cfg.KafkaTopicWalletTracking,
+		s.logger,
+		s,
+		s.kafkaMetrics,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create kafka consumer: %w", err)
+	}
+	return consumer, nil
 }
 
 func (s *Service) StartWorkers(ctx context.Context) {

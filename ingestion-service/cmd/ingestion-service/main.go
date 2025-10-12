@@ -55,6 +55,21 @@ func main() {
 
 	go svc.StartWorkers(ctx)
 
+	if cfg.KafkaEnabled {
+		consumer, err := svc.InitConsumer(ctx)
+		if err != nil {
+			logger.Error().Err(err).Msg("kafka consumer init failed, continuing without consumer")
+		} else {
+			go consumer.Run(ctx)
+			defer func() {
+				if err := consumer.Stop(); err != nil {
+					logger.Error().Err(err).Msg("consumer stop failed")
+				}
+			}()
+			logger.Info().Msg("kafka consumer started")
+		}
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", svc.HealthCheckHandler)
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))

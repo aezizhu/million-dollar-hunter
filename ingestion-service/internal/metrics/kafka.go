@@ -13,6 +13,11 @@ type KafkaMetrics struct {
 	MessageSize       *prometheus.HistogramVec
 	ConnectionErrors  prometheus.Counter
 	Connected         prometheus.Gauge
+	
+	ConsumerMessagesTotal   *prometheus.CounterVec
+	ConsumerProcessingDuration *prometheus.HistogramVec
+	ConsumerRebalancesTotal prometheus.Counter
+	ConsumerLag            *prometheus.GaugeVec
 }
 
 func NewKafkaMetrics(reg *prometheus.Registry, namespace string) *KafkaMetrics {
@@ -51,6 +56,28 @@ func NewKafkaMetrics(reg *prometheus.Registry, namespace string) *KafkaMetrics {
 		}),
 	}
 
+	m.ConsumerMessagesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "kafka_consumer_messages_total",
+			Help:      "Total number of Kafka messages consumed",
+		}, []string{"topic", "status"})
+	m.ConsumerProcessingDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace: namespace,
+			Name:      "kafka_consumer_processing_duration_seconds",
+			Help:      "Kafka message processing duration in seconds",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 10),
+		}, []string{"topic"})
+	m.ConsumerRebalancesTotal = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "kafka_consumer_rebalances_total",
+			Help:      "Total number of consumer group rebalances",
+		})
+	m.ConsumerLag = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Namespace: namespace,
+			Name:      "kafka_consumer_lag",
+			Help:      "Consumer lag for each partition",
+		}, []string{"topic", "partition"})
+
 	reg.MustRegister(
 		m.PublishTotal,
 		m.PublishDuration,
@@ -58,6 +85,10 @@ func NewKafkaMetrics(reg *prometheus.Registry, namespace string) *KafkaMetrics {
 		m.MessageSize,
 		m.ConnectionErrors,
 		m.Connected,
+		m.ConsumerMessagesTotal,
+		m.ConsumerProcessingDuration,
+		m.ConsumerRebalancesTotal,
+		m.ConsumerLag,
 	)
 
 	return m
@@ -82,6 +113,28 @@ func (m *KafkaMetrics) ObservePublish(topic string, err error, messageSize int, 
 	} else {
 		m.PublishTotal.WithLabelValues(topic, "success").Inc()
 	}
+}
+
+func (m *KafkaMetrics) ObserveConsume(topic string, err error, start time.Time) {
+	if m == nil {
+		return
+	}
+
+	duration := time.Since(start).Seconds()
+	m.ConsumerProcessingDuration.WithLabelValues(topic).Observe(duration)
+
+	if err != nil {
+		m.ConsumerMessagesTotal.WithLabelValues(topic, "error").Inc()
+	} else {
+		m.ConsumerMessagesTotal.WithLabelValues(topic, "success").Inc()
+	}
+}
+
+func (m *KafkaMetrics) ObserveRebalance() {
+	if m == nil {
+		return
+	}
+	m.ConsumerRebalancesTotal.Inc()
 }
 
 func min(a, b int) int {
