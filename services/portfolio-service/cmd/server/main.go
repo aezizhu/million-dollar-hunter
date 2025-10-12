@@ -13,11 +13,10 @@ import (
 
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/cleanup"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/client"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/kafka"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
-	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
-	mdclients "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/clients"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/service"
 )
 
@@ -66,14 +65,16 @@ func main() {
 	}
 	defer db.Close(context.Background())
 
-	var mdc ports.MarketDataClient
-	c, err := mdclients.NewMarketDataGRPCClient(cfg.MarketDataGRPCAddr, cfg.MarketDataTimeout, cfg.MarketDataTLSEnabled)
+	marketDataClient, err := client.NewMarketDataClient(cfg)
 	if err != nil {
-		mdc = nil
+		log.Printf("WARNING: Failed to initialize market-data-service client: %v", err)
+		log.Printf("Portfolio service will start without price enrichment. USD values will be 0.")
+		marketDataClient = nil
 	} else {
-		mdc = c
+		defer marketDataClient.Close()
 	}
-	svc := service.New(db, cfg, mdc)
+
+	svc := service.New(db, cfg, marketDataClient)
 
 	consumer, err := kafka.NewConsumer(cfg, svc)
 	if err != nil {

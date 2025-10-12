@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -33,29 +34,34 @@ type Repository interface {
 	UpsertFromIngest(ctx context.Context, payload []byte) error
 	GetCurrentTokenBalances(ctx context.Context, walletIDOrAddr string) ([]repository.TokenBalance, string, string, error)
 	InsertAssetSnapshots(ctx context.Context, snapshots []repository.AssetSnapshotRow) error
+	EnrichPortfolioWithPrices(ctx context.Context, portfolio *repository.Portfolio, marketDataClient ports.MarketDataClient) error
 	Close(ctx context.Context)
 }
 
 type noopMarketData struct{}
 
-func (n *noopMarketData) GetTokenPrices(ctx context.Context, tokens []ports.TokenIdentifier) ([]ports.TokenPrice, error) {
-	return []ports.TokenPrice{}, nil
+func (n *noopMarketData) GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error) {
+	return 0, nil
 }
-func (n *noopMarketData) GetTokenPrice(ctx context.Context, token ports.TokenIdentifier) (*ports.TokenPrice, error) {
-	return nil, nil
+
+func (n *noopMarketData) GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error) {
+	return map[string]map[string]float64{}, nil
 }
+
+func (n *noopMarketData) Close() error { return nil }
 
 type PortfolioService struct {
-	repo Repository
-	cfg  config.Config
-	mdc  ports.MarketDataClient
+	repo             Repository
+	cfg              config.Config
+	marketDataClient ports.MarketDataClient
 }
 
-func New(repo Repository, cfg config.Config, mdc ports.MarketDataClient) *PortfolioService {
-	if mdc == nil {
-		mdc = &noopMarketData{}
+func New(repo Repository, cfg config.Config, marketDataClient ports.MarketDataClient) *PortfolioService {
+	return &PortfolioService{
+		repo:             repo,
+		cfg:              cfg,
+		marketDataClient: marketDataClient,
 	}
-	return &PortfolioService{repo: repo, cfg: cfg, mdc: mdc}
 }
 
 func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, raw []byte) error {
@@ -70,26 +76,30 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 	if err != nil {
 		return nil
 	}
-	tokens := make([]ports.TokenIdentifier, 0, len(balances))
+	tokensByChain := make(map[string][]string)
 	seen := map[string]struct{}{}
+	lchain := strings.ToLower(chain)
 	for _, b := range balances {
-		addr := strings.ToLower(b.TokenAddress)
+		addr := strings.ToLower(strings.TrimSpace(b.TokenAddress))
 		if addr == "" {
 			continue
 		}
-		key := chain + ":" + addr
+		key := lchain + ":" + addr
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
-		tokens = append(tokens, ports.TokenIdentifier{Address: addr, Chain: strings.ToLower(chain)})
+		tokensByChain[lchain] = append(tokensByChain[lchain], addr)
 	}
 	priceMap := map[string]float64{}
-	if len(tokens) > 0 {
-		prices, err := s.mdc.GetTokenPrices(ctx, tokens)
+	if len(tokensByChain) > 0 && s.marketDataClient != nil {
+		prices, err := s.marketDataClient.GetTokenPrices(ctx, tokensByChain)
 		if err == nil {
-			for _, p := range prices {
-				priceMap[strings.ToLower(p.Chain)+":"+strings.ToLower(p.Address)] = p.USDPrice
+			for ch, m := range prices {
+				lch := strings.ToLower(ch)
+				for addr, price := range m {
+					priceMap[lch+":"+strings.ToLower(addr)] = price
+				}
 			}
 		}
 	}
@@ -119,6 +129,12 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, req *pb.GetPortfoli
 	portfolio, err := s.repo.GetPortfolioByWalletID(ctx, req.GetWalletId())
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "fetch portfolio: %v", err)
+	}
+
+	if s.marketDataClient != nil {
+		if err := s.repo.EnrichPortfolioWithPrices(ctx, portfolio, s.marketDataClient); err != nil {
+			log.Printf("WARNING: Failed to enrich portfolio with prices: %v. Returning portfolio with USD values as 0.", err)
+		}
 	}
 
 	assets := make([]*pb.Asset, 0, len(portfolio.Assets))
@@ -305,8 +321,20 @@ func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWall
 		return nil, status.Errorf(codes.Internal, "fetch wallet details: %v", err)
 	}
 
-	assets := make([]*pb.Asset, 0, len(details.Assets))
-	for _, a := range details.Assets {
+	portfolio := &repository.Portfolio{
+		WalletID:      details.WalletID,
+		Chain:         details.Chain,
+		Assets:        details.Assets,
+		TotalUSDValue: details.TotalUSDValue,
+	}
+	if s.marketDataClient != nil {
+		if err := s.repo.EnrichPortfolioWithPrices(ctx, portfolio, s.marketDataClient); err != nil {
+			log.Printf("WARNING: Failed to enrich wallet %s with prices: %v. Returning wallet with USD values as 0.", details.WalletID, err)
+		}
+	}
+
+	assets := make([]*pb.Asset, 0, len(portfolio.Assets))
+	for _, a := range portfolio.Assets {
 		assets = append(assets, &pb.Asset{
 			TokenAddress: a.TokenAddress,
 			Symbol:       a.Symbol,
@@ -321,7 +349,7 @@ func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWall
 		Address:       details.Address,
 		Chain:         details.Chain,
 		Assets:        assets,
-		TotalUsdValue: details.TotalUSDValue,
+		TotalUsdValue: portfolio.TotalUSDValue,
 	}, nil
 }
 

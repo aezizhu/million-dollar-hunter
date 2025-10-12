@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
 )
 
 type PgxPool interface {
@@ -104,6 +107,7 @@ func (r *Repo) VerifyWalletOwnership(ctx context.Context, userID, walletID strin
 
 type Portfolio struct {
 	WalletID      string
+	Chain         string
 	Assets        []Asset
 	TotalUSDValue float64
 }
@@ -220,6 +224,11 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 	portfolio := &Portfolio{
 		WalletID: walletID,
 		Assets:   make([]Asset, 0),
+	}
+
+	err := r.db.QueryRow(ctx, `SELECT chain FROM wallets WHERE id = $1 OR address = $1 LIMIT 1`, walletID).Scan(&portfolio.Chain)
+	if err != nil {
+		return nil, fmt.Errorf("query wallet chain: %w", err)
 	}
 
 	rows, err := r.db.Query(ctx, `
@@ -601,4 +610,63 @@ func (r *Repo) GetTransactionHistory(ctx context.Context, walletID, address stri
 		Transactions: transactions,
 		TotalCount:   totalCount,
 	}, rows.Err()
+}
+
+func (r *Repo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *Portfolio, marketDataClient ports.MarketDataClient) error {
+	if portfolio == nil || len(portfolio.Assets) == 0 {
+		return nil
+	}
+
+	if portfolio.Chain == "" {
+		return fmt.Errorf("portfolio chain not set")
+	}
+
+	chainNorm := strings.ToLower(portfolio.Chain)
+	
+	uniq := make(map[string]struct{}, len(portfolio.Assets))
+	tokenMap := map[string][]string{chainNorm: {}}
+	for _, a := range portfolio.Assets {
+		if a.TokenAddress == "" {
+			continue
+		}
+		key := strings.ToLower(a.TokenAddress)
+		if _, seen := uniq[key]; !seen {
+			uniq[key] = struct{}{}
+			tokenMap[chainNorm] = append(tokenMap[chainNorm], key)
+		}
+	}
+
+	if len(tokenMap[chainNorm]) == 0 {
+		return nil
+	}
+
+	prices, err := marketDataClient.GetTokenPrices(ctx, tokenMap)
+	if err != nil {
+		return fmt.Errorf("get token prices: %w", err)
+	}
+
+	portfolio.TotalUSDValue = 0
+	var perAssetErrors int
+	for i := range portfolio.Assets {
+		a := &portfolio.Assets[i]
+		chainPrices := prices[chainNorm]
+		price, ok := chainPrices[strings.ToLower(a.TokenAddress)]
+		if !ok {
+			continue
+		}
+
+		bal, perr := strconv.ParseFloat(a.CurrentBalance, 64)
+		if perr != nil {
+			perAssetErrors++
+			a.USDValue = 0
+			continue
+		}
+		a.USDValue = bal * price
+		portfolio.TotalUSDValue += a.USDValue
+	}
+
+	if perAssetErrors > 0 {
+		return fmt.Errorf("price enrichment completed with %d asset parse errors", perAssetErrors)
+	}
+	return nil
 }

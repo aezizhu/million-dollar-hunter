@@ -14,6 +14,8 @@ require (
 	google.golang.org/protobuf v1.36.6
 )
 
+replace github.com/aezizhu/million-dollar-hunter/services/market-data-service => ../market-data-service
+
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
