@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -18,6 +19,28 @@ import (
 
 type MockRepo struct {
 	mock.Mock
+}
+
+type MockMarketDataClient struct {
+	mock.Mock
+}
+
+func (m *MockMarketDataClient) GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error) {
+	args := m.Called(ctx, tokenAddress, chain)
+	return args.Get(0).(float64), args.Error(1)
+}
+
+func (m *MockMarketDataClient) GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error) {
+	args := m.Called(ctx, tokens)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]map[string]float64), args.Error(1)
+}
+
+func (m *MockMarketDataClient) Close() error {
+	args := m.Called()
+	return args.Error(0)
 }
 
 func (m *MockRepo) VerifyWalletOwnership(ctx context.Context, userID, walletID string) error {
@@ -67,11 +90,17 @@ func (m *MockRepo) UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr st
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockRepo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *repository.Portfolio, marketDataClient ports.MarketDataClient) error {
+	args := m.Called(ctx, portfolio, marketDataClient)
+	return args.Error(0)
+}
+
 
 func TestGetPortfolioSummary(t *testing.T) {
 	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, mockMarketDataClient)
 
 	t.Run("success", func(t *testing.T) {
 		wallets := []repository.WalletSummary{
@@ -109,8 +138,9 @@ func TestGetPortfolioSummary(t *testing.T) {
 
 func TestGetWalletDetails(t *testing.T) {
 	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, mockMarketDataClient)
 
 	t.Run("success", func(t *testing.T) {
 		userID := "user123"
@@ -129,6 +159,8 @@ func TestGetWalletDetails(t *testing.T) {
 			Return(nil).Once()
 		mockRepo.On("GetWalletDetails", mock.Anything, walletID, "").
 			Return(details, nil).Once()
+		mockRepo.On("EnrichPortfolioWithPrices", mock.Anything, mock.Anything, mock.Anything).
+			Return(nil).Once()
 
 		req := &pb.GetWalletDetailsRequest{UserId: userID, WalletId: walletID}
 		resp, err := svc.GetWalletDetails(context.Background(), req)
@@ -203,8 +235,9 @@ func TestGetWalletDetails(t *testing.T) {
 
 func TestGetTransactionHistory(t *testing.T) {
 	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, mockMarketDataClient)
 
 	t.Run("success with pagination", func(t *testing.T) {
 		result := &repository.TransactionResult{
@@ -254,8 +287,9 @@ func TestGetTransactionHistory(t *testing.T) {
 
 func TestGetPortfolio(t *testing.T) {
 	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, mockMarketDataClient)
 
 	t.Run("success", func(t *testing.T) {
 		portfolio := &repository.Portfolio{
@@ -268,6 +302,8 @@ func TestGetPortfolio(t *testing.T) {
 
 		mockRepo.On("GetPortfolioByWalletID", mock.Anything, "wallet1").
 			Return(portfolio, nil).Once()
+		mockRepo.On("EnrichPortfolioWithPrices", mock.Anything, mock.Anything, mock.Anything).
+			Return(nil).Once()
 
 		req := &pb.GetPortfolioRequest{WalletId: "wallet1"}
 		resp, err := svc.GetPortfolio(context.Background(), req)
@@ -292,8 +328,9 @@ func TestGetPortfolio(t *testing.T) {
 
 func TestExport(t *testing.T) {
 	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp/portfolio-exports-test"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, mockMarketDataClient)
 
 	t.Run("success JSON export", func(t *testing.T) {
 		userID := "user123"
@@ -426,8 +463,9 @@ func TestExport(t *testing.T) {
 
 func TestHandleTransactionDataIngested(t *testing.T) {
 	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, mockMarketDataClient)
 
 	t.Run("success", func(t *testing.T) {
 		payload := []byte(`{"wallet_address":"0x123","chain":"ethereum","transactions":[]}`)
@@ -450,6 +488,104 @@ func TestHandleTransactionDataIngested(t *testing.T) {
 		err := svc.HandleTransactionDataIngested(context.Background(), payload)
 
 		assert.Error(t, err)
+		mockRepo.AssertExpectations(t)
+	})
+}
+func TestGetPortfolioWithoutMarketDataService(t *testing.T) {
+	mockRepo := new(MockRepo)
+	cfg := config.Config{ExportDir: "/tmp"}
+	svc := New(mockRepo, cfg, nil)
+
+	t.Run("success without price enrichment", func(t *testing.T) {
+		portfolio := &repository.Portfolio{
+			WalletID: "wallet1",
+			Chain:    "ethereum",
+			Assets: []repository.Asset{
+				{TokenAddress: "0xabc", Symbol: "USDC", Name: "USD Coin", CurrentBalance: "1000", USDValue: 0},
+			},
+			TotalUSDValue: 0,
+		}
+
+		mockRepo.On("GetPortfolioByWalletID", mock.Anything, "wallet1").
+			Return(portfolio, nil).Once()
+
+		req := &pb.GetPortfolioRequest{WalletId: "wallet1"}
+		resp, err := svc.GetPortfolio(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, "wallet1", resp.WalletId)
+		assert.Len(t, resp.Assets, 1)
+		assert.Equal(t, float64(0), resp.Assets[0].UsdValue)
+		assert.Equal(t, float64(0), resp.TotalUsdValue)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestGetPortfolioEnrichmentError(t *testing.T) {
+	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
+	cfg := config.Config{ExportDir: "/tmp"}
+	svc := New(mockRepo, cfg, mockMarketDataClient)
+
+	t.Run("enrichment fails gracefully", func(t *testing.T) {
+		portfolio := &repository.Portfolio{
+			WalletID: "wallet1",
+			Chain:    "ethereum",
+			Assets: []repository.Asset{
+				{TokenAddress: "0xabc", Symbol: "USDC", Name: "USD Coin", CurrentBalance: "1000", USDValue: 0},
+			},
+			TotalUSDValue: 0,
+		}
+
+		mockRepo.On("GetPortfolioByWalletID", mock.Anything, "wallet1").
+			Return(portfolio, nil).Once()
+		mockRepo.On("EnrichPortfolioWithPrices", mock.Anything, mock.Anything, mock.Anything).
+			Return(errors.New("market-data-service unavailable")).Once()
+
+		req := &pb.GetPortfolioRequest{WalletId: "wallet1"}
+		resp, err := svc.GetPortfolio(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, "wallet1", resp.WalletId)
+		assert.Len(t, resp.Assets, 1)
+		assert.Equal(t, float64(0), resp.Assets[0].UsdValue)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestGetPortfolioDeduplication(t *testing.T) {
+	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
+	cfg := config.Config{ExportDir: "/tmp"}
+	svc := New(mockRepo, cfg, mockMarketDataClient)
+
+	t.Run("deduplicate token addresses", func(t *testing.T) {
+		portfolio := &repository.Portfolio{
+			WalletID: "wallet1",
+			Chain:    "ethereum",
+			Assets: []repository.Asset{
+				{TokenAddress: "0xABC", Symbol: "USDC", Name: "USD Coin", CurrentBalance: "1000", USDValue: 0},
+				{TokenAddress: "0xabc", Symbol: "USDC", Name: "USD Coin", CurrentBalance: "500", USDValue: 0},
+				{TokenAddress: "0xDEF", Symbol: "USDT", Name: "Tether", CurrentBalance: "250", USDValue: 0},
+			},
+			TotalUSDValue: 0,
+		}
+
+		mockRepo.On("GetPortfolioByWalletID", mock.Anything, "wallet1").
+			Return(portfolio, nil).Once()
+
+		mockRepo.On("EnrichPortfolioWithPrices", mock.Anything, mock.Anything, mock.Anything).
+			Return(nil).Once()
+
+		req := &pb.GetPortfolioRequest{WalletId: "wallet1"}
+		resp, err := svc.GetPortfolio(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, "wallet1", resp.WalletId)
+		assert.Len(t, resp.Assets, 3)
 		mockRepo.AssertExpectations(t)
 	})
 }

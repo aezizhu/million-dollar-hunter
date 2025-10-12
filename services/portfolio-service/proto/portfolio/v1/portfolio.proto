@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package portfolio.v1;
+
+option go_package = "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1";
+
+// PortfolioService provides portfolio tracking and reporting functionality
+service PortfolioService {
+  // GetPortfolio retrieves the current portfolio for a specific wallet
+  rpc GetPortfolio(GetPortfolioRequest) returns (GetPortfolioResponse);
+  
+  // GetPortfolioSummary retrieves a summary of all wallets for a user
+  rpc GetPortfolioSummary(GetPortfolioSummaryRequest) returns (GetPortfolioSummaryResponse);
+  
+  // GetWalletDetails retrieves detailed information about a specific wallet
+  rpc GetWalletDetails(GetWalletDetailsRequest) returns (GetWalletDetailsResponse);
+  
+  // GetTransactionHistory retrieves the transaction history for a wallet
+  rpc GetTransactionHistory(GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse);
+  
+  // Export generates a CSV or JSON export of portfolio data
+  rpc Export(ExportRequest) returns (ExportResponse);
+}
+
+// GetPortfolioRequest requests portfolio data for a specific wallet
+message GetPortfolioRequest {
+  string wallet_id = 1;
+}
+
+// Asset represents a token holding in the portfolio
+message Asset {
+  string token_address = 1;
+  string symbol = 2;
+  string name = 3;
+  string amount = 4;
+  double usd_value = 5;
+}
+
+// GetPortfolioResponse returns the portfolio with price-enriched assets
+message GetPortfolioResponse {
+  string wallet_id = 1;
+  repeated Asset assets = 2;
+  double total_usd_value = 3;
+}
+
+// ExportFormat specifies the output format for exports
+enum ExportFormat {
+  EXPORT_FORMAT_UNSPECIFIED = 0;
+  EXPORT_FORMAT_CSV = 1;
+  EXPORT_FORMAT_JSON = 2;
+}
+
+// ExportRequest requests a portfolio export
+message ExportRequest {
+  string user_id = 1;
+  string wallet_id = 2;
+  ExportFormat format = 3;
+}
+
+// ExportResponse returns the path to the exported file
+message ExportResponse {
+  string path = 1;
+}
+
+// Wallet represents a wallet summary in the portfolio
+message Wallet {
+  string id = 1;
+  string address = 2;
+  string chain = 3;
+  double total_usd_value = 4;
+  int32 asset_count = 5;
+}
+
+// GetPortfolioSummaryRequest requests a summary of all user wallets
+message GetPortfolioSummaryRequest {
+  string user_id = 1;
+}
+
+// GetPortfolioSummaryResponse returns all wallets with their total values
+message GetPortfolioSummaryResponse {
+  repeated Wallet wallets = 1;
+  double total_net_worth = 2;
+}
+
+// GetWalletDetailsRequest requests detailed information for a specific wallet
+message GetWalletDetailsRequest {
+  string user_id = 1;
+  string wallet_id = 2;
+  string address = 3;
+}
+
+// GetWalletDetailsResponse returns wallet details with price-enriched assets
+message GetWalletDetailsResponse {
+  string wallet_id = 1;
+  string address = 2;
+  string chain = 3;
+  repeated Asset assets = 4;
+  double total_usd_value = 5;
+}
+
+// Transaction represents a blockchain transaction
+message Transaction {
+  string hash = 1;
+  string from = 2;
+  string to = 3;
+  string amount = 4;
+  string symbol = 5;
+  string token_address = 6;
+  int64 timestamp = 7;
+  string type = 8;
+}
+
+// GetTransactionHistoryRequest requests transaction history for a wallet
+message GetTransactionHistoryRequest {
+  string wallet_id = 1;
+  string address = 2;
+  int32 page = 3;
+  int32 limit = 4;
+  string filter_by_type = 5;
+}
+
+// GetTransactionHistoryResponse returns paginated transaction history
+message GetTransactionHistoryResponse {
+  repeated Transaction transactions = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 limit = 4;
+}

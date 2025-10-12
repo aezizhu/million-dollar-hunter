@@ -13,6 +13,7 @@ import (
 
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/cleanup"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/client"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/kafka"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
@@ -64,7 +65,16 @@ func main() {
 	}
 	defer db.Close(context.Background())
 
-	svc := service.New(db, cfg)
+	marketDataClient, err := client.NewMarketDataClient(cfg)
+	if err != nil {
+		log.Printf("WARNING: Failed to initialize market-data-service client: %v", err)
+		log.Printf("Portfolio service will start without price enrichment. USD values will be 0.")
+		marketDataClient = nil
+	} else {
+		defer marketDataClient.Close()
+	}
+
+	svc := service.New(db, cfg, marketDataClient)
 
 	consumer, err := kafka.NewConsumer(cfg, svc)
 	if err != nil {
