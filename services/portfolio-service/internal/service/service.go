@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -31,25 +32,17 @@ type Repository interface {
 	GetPortfolioByWalletID(ctx context.Context, walletID string) (*repository.Portfolio, error)
 	UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string) (bool, error)
 	UpsertFromIngest(ctx context.Context, payload []byte) error
-	EnrichPortfolioWithPrices(ctx context.Context, portfolio *repository.Portfolio, marketDataClient interface {
-		GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error)
-		GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error)
-	}) error
+	EnrichPortfolioWithPrices(ctx context.Context, portfolio *repository.Portfolio, marketDataClient ports.MarketDataClient) error
 	Close(ctx context.Context)
-}
-
-type MarketDataClient interface {
-	GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error)
-	GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error)
 }
 
 type PortfolioService struct {
 	repo             Repository
 	cfg              config.Config
-	marketDataClient MarketDataClient
+	marketDataClient ports.MarketDataClient
 }
 
-func New(repo Repository, cfg config.Config, marketDataClient MarketDataClient) *PortfolioService {
+func New(repo Repository, cfg config.Config, marketDataClient ports.MarketDataClient) *PortfolioService {
 	return &PortfolioService{
 		repo:             repo,
 		cfg:              cfg,

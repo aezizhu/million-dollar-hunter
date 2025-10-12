@@ -65,14 +65,13 @@ func main() {
 	}
 	defer db.Close(context.Background())
 
-	marketDataClient, err := client.NewMarketDataClient(cfg.MarketDataServiceAddr)
+	marketDataClient, err := client.NewMarketDataClient(cfg)
 	if err != nil {
-		log.Printf("WARNING: Failed to connect to market-data-service at %s: %v", cfg.MarketDataServiceAddr, err)
+		log.Printf("WARNING: Failed to initialize market-data-service client: %v", err)
 		log.Printf("Portfolio service will start without price enrichment. USD values will be 0.")
 		marketDataClient = nil
 	} else {
 		defer marketDataClient.Close()
-		log.Printf("Connected to market-data-service at %s", cfg.MarketDataServiceAddr)
 	}
 
 	svc := service.New(db, cfg, marketDataClient)

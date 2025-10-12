@@ -15,13 +15,18 @@ type Config struct {
 	TopicPortfolioUpdated string        `env:"TOPIC_PORTFOLIO_UPDATED,notEmpty" envDefault:"PortfolioUpdated"`
 	GroupID               string        `env:"KAFKA_GROUP_ID,notEmpty" envDefault:"portfolio-service"`
 	ExportDir             string        `env:"EXPORT_DIR,notEmpty" envDefault:"/data/exports"`
-	ExportCleanupTTL      time.Duration `env:"EXPORT_CLEANUP_TTL" envDefault:"1h"`
-	ExportCleanupInterval time.Duration `env:"EXPORT_CLEANUP_INTERVAL" envDefault:"15m"`
-	MarketDataServiceAddr string        `env:"MARKET_DATA_SERVICE_ADDR,notEmpty" envDefault:"localhost:50051"`
+	ExportCleanupTTL             time.Duration `env:"EXPORT_CLEANUP_TTL" envDefault:"1h"`
+	ExportCleanupInterval        time.Duration `env:"EXPORT_CLEANUP_INTERVAL" envDefault:"15m"`
+	MarketDataServiceAddr        string        `env:"MARKET_DATA_SERVICE_ADDR,notEmpty" envDefault:"localhost:50051"`
+	MarketDataSingleTimeout      time.Duration `env:"MARKET_DATA_SINGLE_TIMEOUT" envDefault:"5s"`
+	MarketDataBatchTimeout       time.Duration `env:"MARKET_DATA_BATCH_TIMEOUT" envDefault:"10s"`
+	MarketDataTLSEnabled         bool          `env:"MARKET_DATA_TLS_ENABLED" envDefault:"false"`
+	MarketDataCAFile             string        `env:"MARKET_DATA_CA_FILE" envDefault:""`
+	MarketDataServerName         string        `env:"MARKET_DATA_SERVER_NAME" envDefault:""`
 	// Logging configuration - reserved for future structured logging implementation
-	LogLevel              string        `env:"LOG_LEVEL" envDefault:"info"`
-	LogFormat             string        `env:"LOG_FORMAT" envDefault:"json"`
+	LogLevel                     string        `env:"LOG_LEVEL" envDefault:"info"`
+	LogFormat                    string        `env:"LOG_FORMAT" envDefault:"json"`
 	// Observability configuration - reserved for future instrumentation
-	OTELEndpoint          string        `env:"OTEL_EXPORTER_OTLP_ENDPOINT" envDefault:""`
-	PrometheusNamespace   string        `env:"PROMETHEUS_NAMESPACE" envDefault:"portfolio_service"`
+	OTELEndpoint                 string        `env:"OTEL_EXPORTER_OTLP_ENDPOINT" envDefault:""`
+	PrometheusNamespace          string        `env:"PROMETHEUS_NAMESPACE" envDefault:"portfolio_service"`
 }

@@ -6,11 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
 )
 
 type PgxPool interface {
@@ -515,16 +517,8 @@ func (r *Repo) GetTransactionHistory(ctx context.Context, walletID, address stri
 	}, rows.Err()
 }
 
-type MarketDataClient interface {
-	GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error)
-	GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error)
-}
-
-func (r *Repo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *Portfolio, marketDataClient interface {
-	GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error)
-	GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error)
-}) error {
-	if len(portfolio.Assets) == 0 {
+func (r *Repo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *Portfolio, marketDataClient ports.MarketDataClient) error {
+	if portfolio == nil || len(portfolio.Assets) == 0 {
 		return nil
 	}
 
@@ -532,33 +526,52 @@ func (r *Repo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *Portfol
 		return fmt.Errorf("portfolio chain not set")
 	}
 
-	tokenMap := make(map[string][]string)
-	tokenMap[portfolio.Chain] = make([]string, 0, len(portfolio.Assets))
-	for _, asset := range portfolio.Assets {
-		if asset.TokenAddress != "" {
-			tokenMap[portfolio.Chain] = append(tokenMap[portfolio.Chain], asset.TokenAddress)
+	chainNorm := strings.ToLower(portfolio.Chain)
+	
+	uniq := make(map[string]struct{}, len(portfolio.Assets))
+	tokenMap := map[string][]string{chainNorm: {}}
+	for _, a := range portfolio.Assets {
+		if a.TokenAddress == "" {
+			continue
 		}
+		key := strings.ToLower(a.TokenAddress)
+		if _, seen := uniq[key]; !seen {
+			uniq[key] = struct{}{}
+			tokenMap[chainNorm] = append(tokenMap[chainNorm], key)
+		}
+	}
+
+	if len(tokenMap[chainNorm]) == 0 {
+		return nil
 	}
 
 	prices, err := marketDataClient.GetTokenPrices(ctx, tokenMap)
 	if err != nil {
-		return fmt.Errorf("failed to get token prices: %w", err)
+		return fmt.Errorf("get token prices: %w", err)
 	}
 
 	portfolio.TotalUSDValue = 0
+	var perAssetErrors int
 	for i := range portfolio.Assets {
-		asset := &portfolio.Assets[i]
-		if chainPrices, ok := prices[portfolio.Chain]; ok {
-			if price, ok := chainPrices[asset.TokenAddress]; ok {
-				balanceFloat, err := strconv.ParseFloat(asset.CurrentBalance, 64)
-				if err != nil {
-					return fmt.Errorf("failed to parse balance for token %s: %w", asset.TokenAddress, err)
-				}
-				asset.USDValue = balanceFloat * price
-				portfolio.TotalUSDValue += asset.USDValue
-			}
+		a := &portfolio.Assets[i]
+		chainPrices := prices[chainNorm]
+		price, ok := chainPrices[strings.ToLower(a.TokenAddress)]
+		if !ok {
+			continue
 		}
+
+		bal, perr := strconv.ParseFloat(a.CurrentBalance, 64)
+		if perr != nil {
+			perAssetErrors++
+			a.USDValue = 0
+			continue
+		}
+		a.USDValue = bal * price
+		portfolio.TotalUSDValue += a.USDValue
 	}
 
+	if perAssetErrors > 0 {
+		return fmt.Errorf("price enrichment completed with %d asset parse errors", perAssetErrors)
+	}
 	return nil
 }
