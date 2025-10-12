@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
 )
@@ -19,6 +20,7 @@ type PgxPool interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
 	Close()
 }
 
@@ -151,9 +153,11 @@ func (r *Repo) UpsertFromIngest(ctx context.Context, payload []byte) error {
 		return fmt.Errorf("unmarshal event: %w", err)
 	}
 
+
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
+
 	}
 	defer tx.Rollback(ctx)
 
@@ -168,6 +172,20 @@ func (r *Repo) UpsertFromIngest(ctx context.Context, payload []byte) error {
 
 	return tx.Commit(ctx)
 }
+type TokenBalance struct {
+	WalletID     string
+	Chain        string
+	TokenAddress string
+	Balance      string
+}
+
+type AssetSnapshotRow struct {
+	WalletID     string
+	TokenAddress string
+	Balance      string
+	USDValue     string
+}
+
 
 func (r *Repo) upsertWallet(ctx context.Context, tx pgx.Tx, address, chain string) (uuid.UUID, error) {
 	var walletID uuid.UUID
@@ -221,7 +239,7 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 			t.asset_symbol as symbol,
 			SUM(CASE 
 				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
-				WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn') THEN -CAST(t.amount AS NUMERIC)
 				ELSE 0
 			END) as current_balance,
 			COALESCE(MAX(s.usd_value), 0) as usd_value
@@ -238,7 +256,7 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 		GROUP BY t.token_address, t.asset_symbol
 		HAVING SUM(CASE 
 			WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
-			WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+			WHEN t.type IN ('send', 'burn') THEN -CAST(t.amount AS NUMERIC)
 			ELSE 0
 		END) > 0
 		ORDER BY usd_value DESC, current_balance DESC
@@ -260,6 +278,99 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 	}
 
 	return portfolio, rows.Err()
+}
+func (r *Repo) GetCurrentTokenBalances(ctx context.Context, walletIDOrAddr string) ([]TokenBalance, string, string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var walletID, chain string
+	if err := r.db.QueryRow(ctx, `SELECT id, chain FROM wallets WHERE id = $1 OR address = $1 LIMIT 1`, walletIDOrAddr).Scan(&walletID, &chain); err != nil {
+		return nil, "", "", err
+	}
+
+	rows, err := r.db.Query(ctx, `
+		SELECT 
+			t.token_address,
+			SUM(CASE 
+				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn') THEN -CAST(t.amount AS NUMERIC)
+				ELSE 0
+			END) as current_balance
+		FROM transactions_view t
+		WHERE t.wallet_id = $1
+			AND t.token_address IS NOT NULL 
+			AND t.token_address != ''
+		GROUP BY t.token_address
+		HAVING SUM(CASE 
+			WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
+			WHEN t.type IN ('send', 'burn') THEN -CAST(t.amount AS NUMERIC)
+			ELSE 0
+		END) > 0
+	`, walletID)
+	if err != nil {
+		return nil, "", "", err
+	}
+	defer rows.Close()
+
+	var out []TokenBalance
+	for rows.Next() {
+		var addr string
+		var bal string
+		if err := rows.Scan(&addr, &bal); err != nil {
+			return nil, "", "", err
+		}
+		out = append(out, TokenBalance{
+			WalletID:     walletID,
+			Chain:        chain,
+			TokenAddress: addr,
+			Balance:      bal,
+		})
+	}
+	return out, walletID, chain, rows.Err()
+}
+
+
+func (r *Repo) InsertAssetSnapshots(ctx context.Context, snapshots []AssetSnapshotRow) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	now := time.Now().UTC()
+	tsBucket := now.Truncate(time.Minute)
+
+	batch := &pgx.Batch{}
+	for _, s := range snapshots {
+		batch.Queue(`
+			INSERT INTO asset_snapshots (wallet_id, token_address, ts, ts_bucket, balance, usd_value)
+			VALUES ($1,$2,$3,$4,CAST($5 AS NUMERIC),CAST($6 AS NUMERIC))
+			ON CONFLICT (wallet_id, token_address, ts_bucket)
+			DO UPDATE SET balance = EXCLUDED.balance, usd_value = EXCLUDED.usd_value, ts = GREATEST(asset_snapshots.ts, EXCLUDED.ts)
+		`, s.WalletID, s.TokenAddress, now, tsBucket, s.Balance, s.USDValue)
+	}
+	type batchSender interface {
+		SendBatch(ctx context.Context, b *pgx.Batch) pgx.BatchResults
+	}
+	if sb, ok := r.db.(batchSender); ok {
+		br := sb.SendBatch(ctx, batch)
+		defer br.Close()
+		for range snapshots {
+			if _, err := br.Exec(); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, s := range snapshots {
+		if _, err := r.db.Exec(ctx, `
+			INSERT INTO asset_snapshots (wallet_id, token_address, ts, ts_bucket, balance, usd_value)
+			VALUES ($1,$2,$3,$4,CAST($5 AS NUMERIC),CAST($6 AS NUMERIC))
+			ON CONFLICT (wallet_id, token_address, ts_bucket)
+			DO UPDATE SET balance = EXCLUDED.balance, usd_value = EXCLUDED.usd_value, ts = GREATEST(asset_snapshots.ts, EXCLUDED.ts)
+		`, s.WalletID, s.TokenAddress, now, tsBucket, s.Balance, s.USDValue); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type WalletSummary struct {
@@ -298,7 +409,7 @@ func (r *Repo) GetPortfolioSummary(ctx context.Context, userID string) ([]Wallet
 			GROUP BY t.wallet_id, t.token_address, s.usd_value
 			HAVING SUM(CASE 
 				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
-				WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn') THEN -CAST(t.amount AS NUMERIC)
 				ELSE 0
 			END) > 0
 		) subq ON w.id = subq.wallet_id
@@ -369,7 +480,7 @@ func (r *Repo) GetWalletDetails(ctx context.Context, walletID, address string) (
 			t.asset_symbol as symbol,
 			SUM(CASE 
 				WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
-				WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+				WHEN t.type IN ('send', 'burn') THEN -CAST(t.amount AS NUMERIC)
 				ELSE 0
 			END) as current_balance,
 			COALESCE(MAX(s.usd_value), 0) as usd_value
@@ -386,7 +497,7 @@ func (r *Repo) GetWalletDetails(ctx context.Context, walletID, address string) (
 		GROUP BY t.token_address, t.asset_symbol
 		HAVING SUM(CASE 
 			WHEN t.type IN ('receive', 'mint') THEN CAST(t.amount AS NUMERIC)
-			WHEN t.type IN ('send', 'burn', 'approve') THEN -CAST(t.amount AS NUMERIC)
+			WHEN t.type IN ('send', 'burn') THEN -CAST(t.amount AS NUMERIC)
 			ELSE 0
 		END) > 0
 		ORDER BY usd_value DESC, current_balance DESC

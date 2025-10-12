@@ -13,9 +13,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/shopspring/decimal"
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
@@ -32,14 +34,32 @@ type Repository interface {
 	GetPortfolioByWalletID(ctx context.Context, walletID string) (*repository.Portfolio, error)
 	UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr string) (bool, error)
 	UpsertFromIngest(ctx context.Context, payload []byte) error
+	GetCurrentTokenBalances(ctx context.Context, walletIDOrAddr string) ([]repository.TokenBalance, string, string, error)
+	InsertAssetSnapshots(ctx context.Context, snapshots []repository.AssetSnapshotRow) error
 	EnrichPortfolioWithPrices(ctx context.Context, portfolio *repository.Portfolio, marketDataClient ports.MarketDataClient) error
 	Close(ctx context.Context)
 }
+
+type noopMarketData struct{}
+
+func (n *noopMarketData) GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error) {
+	return 0, nil
+}
+
+func (n *noopMarketData) GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error) {
+	return map[string]map[string]float64{}, nil
+}
+
+func (n *noopMarketData) Close() error { return nil }
 
 type PortfolioService struct {
 	repo             Repository
 	cfg              config.Config
 	marketDataClient ports.MarketDataClient
+	metrics          interface {
+		IncCounter(name string, labels map[string]string)
+		ObserveDuration(name string, seconds float64, labels map[string]string)
+	}
 }
 
 func New(repo Repository, cfg config.Config, marketDataClient ports.MarketDataClient) *PortfolioService {
@@ -47,11 +67,126 @@ func New(repo Repository, cfg config.Config, marketDataClient ports.MarketDataCl
 		repo:             repo,
 		cfg:              cfg,
 		marketDataClient: marketDataClient,
+		metrics:          nil,
 	}
 }
+func (s *PortfolioService) WithMetrics(rec interface {
+	IncCounter(string, map[string]string)
+	ObserveDuration(string, float64, map[string]string)
+}) *PortfolioService {
+	s.metrics = rec
+	return s
+}
+
 
 func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, raw []byte) error {
-	return s.repo.UpsertFromIngest(ctx, raw)
+	if err := s.repo.UpsertFromIngest(ctx, raw); err != nil {
+		return err
+	}
+
+	var evt repository.TransactionDataIngestedEvent
+	if err := json.Unmarshal(raw, &evt); err != nil {
+		if s.metrics != nil {
+			s.metrics.IncCounter("enrichment.failure", map[string]string{"reason": "unmarshal", "chain": "unknown"})
+		}
+		log.Printf("ingest: unmarshal failed err=%v", err)
+		return err
+	}
+
+	log.Printf("enrich: start wallet=%s chain=%s", evt.WalletAddress, evt.Chain)
+
+	balances, walletID, chain, err := s.repo.GetCurrentTokenBalances(ctx, evt.WalletAddress)
+	if err != nil {
+		if s.metrics != nil {
+			s.metrics.IncCounter("enrichment.failure", map[string]string{"reason": "balances", "chain": strings.ToLower(evt.Chain)})
+		}
+		log.Printf("enrich: GetCurrentTokenBalances failed wallet=%s chain=%s err=%v", evt.WalletAddress, evt.Chain, err)
+		return nil
+	}
+
+	tokensByChain := make(map[string][]string)
+	seen := map[string]struct{}{}
+	lchain := strings.ToLower(chain)
+	for _, b := range balances {
+		addr := strings.ToLower(strings.TrimSpace(b.TokenAddress))
+		if addr == "" {
+			continue
+		}
+		key := lchain + ":" + addr
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		tokensByChain[lchain] = append(tokensByChain[lchain], addr)
+	}
+	log.Printf("enrich: tokens deduped wallet=%s chain=%s tokens=%d", evt.WalletAddress, chain, len(tokensByChain[lchain]))
+
+	priceMap := map[string]float64{}
+	if len(tokensByChain) > 0 && s.marketDataClient != nil {
+		start := time.Now()
+		prices, err := s.marketDataClient.GetTokenPrices(ctx, tokensByChain)
+		dur := time.Since(start).Seconds()
+		if s.metrics != nil {
+			chainLbl := strings.ToLower(chain)
+			s.metrics.ObserveDuration("market_data.request.seconds", dur, map[string]string{
+				"chain": chainLbl,
+			})
+			status := "success"
+			if err != nil {
+				status = "failure"
+			}
+			s.metrics.IncCounter("market_data.request.total", map[string]string{"chain": chainLbl, "status": status})
+		}
+		if err != nil {
+			log.Printf("enrich: GetTokenPrices failed wallet=%s chain=%s tokens=%d err=%v; defaulting price=0", evt.WalletAddress, chain, len(tokensByChain[lchain]), err)
+		} else {
+			for ch, m := range prices {
+				lch := strings.ToLower(ch)
+				for addr, price := range m {
+					priceMap[lch+":"+strings.ToLower(addr)] = price
+				}
+			}
+		}
+	}
+
+	rows := make([]repository.AssetSnapshotRow, 0, len(balances))
+	for _, b := range balances {
+		key := strings.ToLower(chain) + ":" + strings.ToLower(b.TokenAddress)
+		price := priceMap[key]
+		var usdStr string
+		if price == 0 {
+			usdStr = "0"
+		} else {
+			balDec, err := decimal.NewFromString(b.Balance)
+			if err != nil {
+				usdStr = "0"
+			} else {
+				priceDec := decimal.NewFromFloat(price)
+				usdStr = balDec.Mul(priceDec).String()
+			}
+		}
+		rows = append(rows, repository.AssetSnapshotRow{
+			WalletID:     walletID,
+			TokenAddress: b.TokenAddress,
+			Balance:      b.Balance,
+			USDValue:     usdStr,
+		})
+	}
+
+	if len(rows) > 0 {
+		if err := s.repo.InsertAssetSnapshots(ctx, rows); err != nil {
+			if s.metrics != nil {
+				s.metrics.IncCounter("enrichment.failure", map[string]string{"reason": "insert", "chain": strings.ToLower(chain)})
+			}
+			log.Printf("enrich: InsertAssetSnapshots failed wallet=%s chain=%s rows=%d err=%v", evt.WalletAddress, chain, len(rows), err)
+			return err
+		}
+		if s.metrics != nil {
+			s.metrics.IncCounter("enrichment.snapshot_writes.total", map[string]string{"chain": strings.ToLower(chain)})
+		}
+		log.Printf("enrich: snapshot write ok wallet=%s chain=%s rows=%d", evt.WalletAddress, chain, len(rows))
+	}
+	return nil
 }
 
 func (s *PortfolioService) GetPortfolio(ctx context.Context, req *pb.GetPortfolioRequest) (*pb.GetPortfolioResponse, error) {

@@ -4,17 +4,16 @@ go 1.24.0
 
 require (
 	github.com/IBM/sarama v1.43.3
-	github.com/aezizhu/million-dollar-hunter/services/market-data-service v0.0.0-00010101000000-000000000000
 	github.com/caarlos0/env/v11 v11.1.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/pashagolub/pgxmock/v4 v4.9.0
+	github.com/shopspring/decimal v1.4.0
 	github.com/stretchr/testify v1.11.1
+	github.com/prometheus/client_golang v1.20.3
 	google.golang.org/grpc v1.76.0
 	google.golang.org/protobuf v1.36.6
 )
-
-replace github.com/aezizhu/million-dollar-hunter/services/market-data-service => ../market-data-service
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

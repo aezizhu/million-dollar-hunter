@@ -21,6 +21,14 @@ type MockRepo struct {
 	mock.Mock
 }
 
+func (m *MockRepo) GetCurrentTokenBalances(ctx context.Context, walletIDOrAddr string) ([]repository.TokenBalance, string, string, error) {
+	return []repository.TokenBalance{}, "", "", nil
+}
+
+func (m *MockRepo) InsertAssetSnapshots(ctx context.Context, snapshots []repository.AssetSnapshotRow) error {
+	return nil
+}
+
 type MockMarketDataClient struct {
 	mock.Mock
 }
@@ -95,13 +103,11 @@ func (m *MockRepo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *rep
 	return args.Error(0)
 }
 
-
 func TestGetPortfolioSummary(t *testing.T) {
 	mockRepo := new(MockRepo)
 	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
 	svc := New(mockRepo, cfg, mockMarketDataClient)
-
 	t.Run("success", func(t *testing.T) {
 		wallets := []repository.WalletSummary{
 			{ID: "wallet1", Address: "0x123", Chain: "ethereum", TotalUSDValue: 1000, AssetCount: 5},
@@ -141,7 +147,6 @@ func TestGetWalletDetails(t *testing.T) {
 	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
 	svc := New(mockRepo, cfg, mockMarketDataClient)
-
 	t.Run("success", func(t *testing.T) {
 		userID := "user123"
 		walletID := "wallet1"
@@ -238,7 +243,6 @@ func TestGetTransactionHistory(t *testing.T) {
 	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
 	svc := New(mockRepo, cfg, mockMarketDataClient)
-
 	t.Run("success with pagination", func(t *testing.T) {
 		result := &repository.TransactionResult{
 			Transactions: []repository.Transaction{
@@ -290,7 +294,6 @@ func TestGetPortfolio(t *testing.T) {
 	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
 	svc := New(mockRepo, cfg, mockMarketDataClient)
-
 	t.Run("success", func(t *testing.T) {
 		portfolio := &repository.Portfolio{
 			WalletID: "wallet1",
@@ -331,7 +334,6 @@ func TestExport(t *testing.T) {
 	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp/portfolio-exports-test"}
 	svc := New(mockRepo, cfg, mockMarketDataClient)
-
 	t.Run("success JSON export", func(t *testing.T) {
 		userID := "user123"
 		validWalletID := "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb0"
@@ -466,7 +468,6 @@ func TestHandleTransactionDataIngested(t *testing.T) {
 	mockMarketDataClient := new(MockMarketDataClient)
 	cfg := config.Config{ExportDir: "/tmp"}
 	svc := New(mockRepo, cfg, mockMarketDataClient)
-
 	t.Run("success", func(t *testing.T) {
 		payload := []byte(`{"wallet_address":"0x123","chain":"ethereum","transactions":[]}`)
 

@@ -10,12 +10,14 @@ import (
 
 	"github.com/caarlos0/env/v11"
 	"google.golang.org/grpc"
+	"net/http"
 
 	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/cleanup"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/client"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/kafka"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/metrics"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/service"
 )
@@ -74,7 +76,19 @@ func main() {
 		defer marketDataClient.Close()
 	}
 
-	svc := service.New(db, cfg, marketDataClient)
+	var rec metrics.Recorder = metrics.Noop{}
+	if cfg.MetricsAddr != "" {
+		rec = metrics.NewPrometheusRecorder(cfg.PrometheusNamespace)
+		go func() {
+			mux := http.NewServeMux()
+			mux.Handle("/metrics", metrics.Handler())
+			log.Printf("metrics listening on %s", cfg.MetricsAddr)
+			if err := http.ListenAndServe(cfg.MetricsAddr, mux); err != nil {
+				log.Printf("metrics server error: %v", err)
+			}
+		}()
+	}
+	svc := service.New(db, cfg, marketDataClient).WithMetrics(rec)
 
 	consumer, err := kafka.NewConsumer(cfg, svc)
 	if err != nil {
