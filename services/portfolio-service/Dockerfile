@@ -1,9 +1,14 @@
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY services/portfolio-service/go.mod services/portfolio-service/go.sum* ./
+FROM golang:1.24-alpine AS builder
+WORKDIR /workspace
+# Copy go workspace files
+COPY go.work go.work.sum* ./
+# Copy all service directories
+COPY services/ ./services/
+COPY api-gateway/ ./api-gateway/
+COPY ingestion-service/ ./ingestion-service/
+# Build from portfolio-service directory
+WORKDIR /workspace/services/portfolio-service
 RUN go mod download
-COPY services/portfolio-service/ ./
-COPY proto/ ./proto/
 RUN go build -o /bin/portfolio-service ./cmd/server
 
 FROM alpine:3.20

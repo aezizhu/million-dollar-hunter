@@ -1,10 +1,5 @@
-# Build stage
 FROM golang:1.24-alpine AS builder
 
-# Install build dependencies
-RUN apk add --no-cache git protobuf-dev
-
-# Set working directory
 WORKDIR /workspace
 
 # Copy go workspace files
@@ -15,10 +10,10 @@ COPY services/ ./services/
 COPY api-gateway/ ./api-gateway/
 COPY ingestion-service/ ./ingestion-service/
 
-# Build from market-data-service directory
-WORKDIR /workspace/services/market-data-service
+# Build from auth-service directory
+WORKDIR /workspace/services/auth-service
 RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/market-data-service ./cmd/market-data-service
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/auth-service ./cmd/auth-service
 
 # Runtime stage
 FROM alpine:latest
@@ -34,10 +29,10 @@ RUN addgroup -g 1000 appuser && \
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/market-data-service .
+COPY --from=builder /app/auth-service .
 
-# Copy migrations
-COPY --from=builder /workspace/services/market-data-service/db ./db
+# Copy migrations if they exist
+COPY --from=builder /workspace/services/auth-service/db ./db
 
 # Change ownership
 RUN chown -R appuser:appuser /app
@@ -45,8 +40,8 @@ RUN chown -R appuser:appuser /app
 # Switch to non-root user
 USER appuser
 
-# Expose gRPC port
-EXPOSE 50051
+# Expose HTTP and gRPC ports
+EXPOSE 8081 50051
 
 # Run the application
-CMD ["./market-data-service"]
+CMD ["./auth-service"]

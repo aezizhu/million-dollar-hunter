@@ -9,3 +9,5 @@ use ./services/auth-service
 use ./services/portfolio-service
 
 use ./services/market-data-service
+
+use ./ingestion-service
