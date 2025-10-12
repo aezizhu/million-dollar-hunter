@@ -2,6 +2,9 @@ package metrics
 
 import (
 	"net/http"
+	"sort"
+	"strings"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -9,6 +12,7 @@ import (
 
 type PrometheusRecorder struct {
 	namespace string
+	mu        sync.RWMutex
 	counters  map[string]*prometheus.CounterVec
 	hists     map[string]*prometheus.HistogramVec
 }
@@ -21,46 +25,48 @@ func NewPrometheusRecorder(namespace string) *PrometheusRecorder {
 	}
 }
 
-func (p *PrometheusRecorder) ensureCounter(name string, labels map[string]string) *prometheus.CounterVec {
-	lbls := keys(labels)
-	key := name + "|" + joinKeys(lbls)
-	if c, ok := p.counters[key]; ok {
-		return c
-	}
-	cv := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: p.namespace,
-		Name:      sanitize(name),
-		Help:      name,
-	}, lbls)
-	prometheus.MustRegister(cv)
-	p.counters[key] = cv
-	return cv
-}
-
-func (p *PrometheusRecorder) ensureHist(name string, labels map[string]string) *prometheus.HistogramVec {
-	lbls := keys(labels)
-	key := name + "|" + joinKeys(lbls)
-	if h, ok := p.hists[key]; ok {
-		return h
-	}
-	hv := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: p.namespace,
-		Name:      sanitize(name),
-		Help:      name,
-		Buckets: prometheus.DefBuckets,
-	}, lbls)
-	prometheus.MustRegister(hv)
-	p.hists[key] = hv
-	return hv
-}
-
 func (p *PrometheusRecorder) IncCounter(name string, labels map[string]string) {
-	cv := p.ensureCounter(name, labels)
+	lbls := sortedKeys(labels)
+	key := name + "|" + strings.Join(lbls, ",")
+	p.mu.RLock()
+	cv, ok := p.counters[key]
+	p.mu.RUnlock()
+	if !ok {
+		p.mu.Lock()
+		if cv, ok = p.counters[key]; !ok {
+			cv = prometheus.NewCounterVec(prometheus.CounterOpts{
+				Namespace: p.namespace,
+				Name:      sanitize(name),
+				Help:      name,
+			}, lbls)
+			prometheus.MustRegister(cv)
+			p.counters[key] = cv
+		}
+		p.mu.Unlock()
+	}
 	cv.With(labels).Inc()
 }
 
 func (p *PrometheusRecorder) ObserveDuration(name string, seconds float64, labels map[string]string) {
-	hv := p.ensureHist(name, labels)
+	lbls := sortedKeys(labels)
+	key := name + "|" + strings.Join(lbls, ",")
+	p.mu.RLock()
+	hv, ok := p.hists[key]
+	p.mu.RUnlock()
+	if !ok {
+		p.mu.Lock()
+		if hv, ok = p.hists[key]; !ok {
+			hv = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Namespace: p.namespace,
+				Name:      sanitize(name),
+				Help:      name,
+				Buckets:   prometheus.DefBuckets,
+			}, lbls)
+			prometheus.MustRegister(hv)
+			p.hists[key] = hv
+		}
+		p.mu.Unlock()
+	}
 	hv.With(labels).Observe(seconds)
 }
 
@@ -68,7 +74,7 @@ func Handler() http.Handler {
 	return promhttp.Handler()
 }
 
-func keys(m map[string]string) []string {
+func sortedKeys(m map[string]string) []string {
 	if len(m) == 0 {
 		return nil
 	}
@@ -76,18 +82,7 @@ func keys(m map[string]string) []string {
 	for k := range m {
 		out = append(out, k)
 	}
-	return out
-}
-
-func joinKeys(arr []string) string {
-	if len(arr) == 0 {
-		return ""
-	}
-	sep := ","
-	out := arr[0]
-	for i := 1; i < len(arr); i++ {
-		out += sep + arr[i]
-	}
+	sort.Strings(out)
 	return out
 }
 

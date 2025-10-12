@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
 )
@@ -19,6 +20,7 @@ type PgxPool interface {
 	Begin(ctx context.Context) (pgx.Tx, error)
 	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Exec(ctx context.Context, sql string, args ...interface{}) (pgconn.CommandTag, error)
 	Close()
 }
 
@@ -359,7 +361,7 @@ func (r *Repo) InsertAssetSnapshots(ctx context.Context, snapshots []AssetSnapsh
 	}
 
 	for _, s := range snapshots {
-		if _, err := r.db.Query(ctx, `
+		if _, err := r.db.Exec(ctx, `
 			INSERT INTO asset_snapshots (wallet_id, token_address, ts, ts_bucket, balance, usd_value)
 			VALUES ($1,$2,$3,$4,CAST($5 AS NUMERIC),CAST($6 AS NUMERIC))
 			ON CONFLICT (wallet_id, token_address, ts_bucket)
