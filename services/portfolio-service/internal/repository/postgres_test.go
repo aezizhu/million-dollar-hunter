@@ -242,6 +242,10 @@ func TestGetPortfolioByWalletID(t *testing.T) {
 	walletID := uuid.New().String()
 
 	t.Run("success", func(t *testing.T) {
+		mock.ExpectQuery("SELECT chain FROM wallets").
+			WithArgs(walletID).
+			WillReturnRows(pgxmock.NewRows([]string{"chain"}).AddRow("ethereum"))
+
 		rows := pgxmock.NewRows([]string{"token_address", "symbol", "current_balance", "usd_value"}).
 			AddRow("0xabc", "USDC", float64(1000.5), float64(1000.50)).
 			AddRow("0xdef", "USDT", float64(500.25), float64(500.25))
@@ -254,11 +258,16 @@ func TestGetPortfolioByWalletID(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Equal(t, walletID, portfolio.WalletID)
+		assert.Equal(t, "ethereum", portfolio.Chain)
 		assert.Len(t, portfolio.Assets, 2)
 		assert.Equal(t, float64(1500.75), portfolio.TotalUSDValue)
 	})
 
 	t.Run("query error", func(t *testing.T) {
+		mock.ExpectQuery("SELECT chain FROM wallets").
+			WithArgs(walletID).
+			WillReturnRows(pgxmock.NewRows([]string{"chain"}).AddRow("ethereum"))
+
 		mock.ExpectQuery("SELECT.*FROM transactions_view").
 			WithArgs(walletID).
 			WillReturnError(errors.New("db error"))
@@ -313,6 +322,10 @@ func TestBalanceAccumulation(t *testing.T) {
 		err := repo.UpsertFromIngest(context.Background(), payload)
 		assert.NoError(t, err)
 
+		mock.ExpectQuery("SELECT chain FROM wallets").
+			WithArgs(walletUUID.String()).
+			WillReturnRows(pgxmock.NewRows([]string{"chain"}).AddRow("ethereum"))
+
 		balanceRows := pgxmock.NewRows([]string{"token_address", "symbol", "current_balance", "usd_value"}).
 			AddRow("0xUSDC", "USDC", float64(125), float64(125))
 
@@ -323,6 +336,7 @@ func TestBalanceAccumulation(t *testing.T) {
 		portfolio, err := repo.GetPortfolioByWalletID(context.Background(), walletUUID.String())
 
 		assert.NoError(t, err)
+		assert.Equal(t, "ethereum", portfolio.Chain)
 		assert.Len(t, portfolio.Assets, 1)
 		assert.Equal(t, "125.000000000000000000", portfolio.Assets[0].CurrentBalance)
 	})

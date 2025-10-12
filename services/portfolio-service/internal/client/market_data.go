@@ -18,20 +18,15 @@ type MarketDataClient struct {
 }
 
 func NewMarketDataClient(addr string) (*MarketDataClient, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(
-		ctx,
+	conn, err := grpc.NewClient(
 		addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithBlock(),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to market-data-service at %s: %w", addr, err)
+		return nil, fmt.Errorf("failed to create market-data-service client for %s: %w", addr, err)
 	}
 
-	log.Printf("Connected to market-data-service at %s", addr)
+	log.Printf("Created market-data-service client for %s (connection will be established on first RPC)", addr)
 
 	return &MarketDataClient{
 		conn:   conn,
@@ -40,6 +35,9 @@ func NewMarketDataClient(addr string) (*MarketDataClient, error) {
 }
 
 func (c *MarketDataClient) GetTokenPrice(ctx context.Context, tokenAddress, chain string) (float64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	resp, err := c.client.GetTokenPrice(ctx, &marketdatapb.GetTokenPriceRequest{
 		TokenAddress: tokenAddress,
 		Chain:        chain,
@@ -52,6 +50,9 @@ func (c *MarketDataClient) GetTokenPrice(ctx context.Context, tokenAddress, chai
 }
 
 func (c *MarketDataClient) GetTokenPrices(ctx context.Context, tokens map[string][]string) (map[string]map[string]float64, error) {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
 	var pbTokens []*marketdatapb.TokenIdentifier
 	for chain, addresses := range tokens {
 		for _, addr := range addresses {

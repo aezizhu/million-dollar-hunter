@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -70,8 +71,10 @@ func (s *PortfolioService) GetPortfolio(ctx context.Context, req *pb.GetPortfoli
 		return nil, status.Errorf(codes.Internal, "fetch portfolio: %v", err)
 	}
 
-	if err := s.repo.EnrichPortfolioWithPrices(ctx, portfolio, s.marketDataClient); err != nil {
-		return nil, status.Errorf(codes.Internal, "enrich portfolio with prices: %v", err)
+	if s.marketDataClient != nil {
+		if err := s.repo.EnrichPortfolioWithPrices(ctx, portfolio, s.marketDataClient); err != nil {
+			log.Printf("WARNING: Failed to enrich portfolio with prices: %v. Returning portfolio with USD values as 0.", err)
+		}
 	}
 
 	assets := make([]*pb.Asset, 0, len(portfolio.Assets))
@@ -260,11 +263,14 @@ func (s *PortfolioService) GetWalletDetails(ctx context.Context, req *pb.GetWall
 
 	portfolio := &repository.Portfolio{
 		WalletID:      details.WalletID,
+		Chain:         details.Chain,
 		Assets:        details.Assets,
 		TotalUSDValue: details.TotalUSDValue,
 	}
-	if err := s.repo.EnrichPortfolioWithPrices(ctx, portfolio, s.marketDataClient); err != nil {
-		return nil, status.Errorf(codes.Internal, "enrich wallet with prices: %v", err)
+	if s.marketDataClient != nil {
+		if err := s.repo.EnrichPortfolioWithPrices(ctx, portfolio, s.marketDataClient); err != nil {
+			log.Printf("WARNING: Failed to enrich wallet %s with prices: %v. Returning wallet with USD values as 0.", details.WalletID, err)
+		}
 	}
 
 	assets := make([]*pb.Asset, 0, len(portfolio.Assets))

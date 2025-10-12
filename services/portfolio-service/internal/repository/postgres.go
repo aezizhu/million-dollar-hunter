@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -104,6 +105,7 @@ func (r *Repo) VerifyWalletOwnership(ctx context.Context, userID, walletID strin
 
 type Portfolio struct {
 	WalletID      string
+	Chain         string
 	Assets        []Asset
 	TotalUSDValue float64
 }
@@ -204,6 +206,11 @@ func (r *Repo) GetPortfolioByWalletID(ctx context.Context, walletID string) (*Po
 	portfolio := &Portfolio{
 		WalletID: walletID,
 		Assets:   make([]Asset, 0),
+	}
+
+	err := r.db.QueryRow(ctx, `SELECT chain FROM wallets WHERE id = $1 OR address = $1 LIMIT 1`, walletID).Scan(&portfolio.Chain)
+	if err != nil {
+		return nil, fmt.Errorf("query wallet chain: %w", err)
 	}
 
 	rows, err := r.db.Query(ctx, `
@@ -521,19 +528,15 @@ func (r *Repo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *Portfol
 		return nil
 	}
 
-	var walletChain string
-	err := r.db.QueryRow(ctx, `
-		SELECT chain FROM wallets WHERE id = $1 OR address = $1 LIMIT 1
-	`, portfolio.WalletID).Scan(&walletChain)
-	if err != nil {
-		return fmt.Errorf("failed to get wallet chain: %w", err)
+	if portfolio.Chain == "" {
+		return fmt.Errorf("portfolio chain not set")
 	}
 
 	tokenMap := make(map[string][]string)
-	tokenMap[walletChain] = make([]string, 0, len(portfolio.Assets))
+	tokenMap[portfolio.Chain] = make([]string, 0, len(portfolio.Assets))
 	for _, asset := range portfolio.Assets {
 		if asset.TokenAddress != "" {
-			tokenMap[walletChain] = append(tokenMap[walletChain], asset.TokenAddress)
+			tokenMap[portfolio.Chain] = append(tokenMap[portfolio.Chain], asset.TokenAddress)
 		}
 	}
 
@@ -545,10 +548,12 @@ func (r *Repo) EnrichPortfolioWithPrices(ctx context.Context, portfolio *Portfol
 	portfolio.TotalUSDValue = 0
 	for i := range portfolio.Assets {
 		asset := &portfolio.Assets[i]
-		if chainPrices, ok := prices[walletChain]; ok {
+		if chainPrices, ok := prices[portfolio.Chain]; ok {
 			if price, ok := chainPrices[asset.TokenAddress]; ok {
-				balanceFloat := 0.0
-				fmt.Sscanf(asset.CurrentBalance, "%f", &balanceFloat)
+				balanceFloat, err := strconv.ParseFloat(asset.CurrentBalance, 64)
+				if err != nil {
+					return fmt.Errorf("failed to parse balance for token %s: %w", asset.TokenAddress, err)
+				}
 				asset.USDValue = balanceFloat * price
 				portfolio.TotalUSDValue += asset.USDValue
 			}

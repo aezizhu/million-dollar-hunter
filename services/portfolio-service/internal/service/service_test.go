@@ -488,3 +488,66 @@ func TestHandleTransactionDataIngested(t *testing.T) {
 		mockRepo.AssertExpectations(t)
 	})
 }
+func TestGetPortfolioWithoutMarketDataService(t *testing.T) {
+	mockRepo := new(MockRepo)
+	cfg := config.Config{ExportDir: "/tmp"}
+	svc := New(mockRepo, cfg, nil)
+
+	t.Run("success without price enrichment", func(t *testing.T) {
+		portfolio := &repository.Portfolio{
+			WalletID: "wallet1",
+			Chain:    "ethereum",
+			Assets: []repository.Asset{
+				{TokenAddress: "0xabc", Symbol: "USDC", Name: "USD Coin", CurrentBalance: "1000", USDValue: 0},
+			},
+			TotalUSDValue: 0,
+		}
+
+		mockRepo.On("GetPortfolioByWalletID", mock.Anything, "wallet1").
+			Return(portfolio, nil).Once()
+
+		req := &pb.GetPortfolioRequest{WalletId: "wallet1"}
+		resp, err := svc.GetPortfolio(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, "wallet1", resp.WalletId)
+		assert.Len(t, resp.Assets, 1)
+		assert.Equal(t, float64(0), resp.Assets[0].UsdValue)
+		assert.Equal(t, float64(0), resp.TotalUsdValue)
+		mockRepo.AssertExpectations(t)
+	})
+}
+
+func TestGetPortfolioEnrichmentError(t *testing.T) {
+	mockRepo := new(MockRepo)
+	mockMarketDataClient := new(MockMarketDataClient)
+	cfg := config.Config{ExportDir: "/tmp"}
+	svc := New(mockRepo, cfg, mockMarketDataClient)
+
+	t.Run("enrichment fails gracefully", func(t *testing.T) {
+		portfolio := &repository.Portfolio{
+			WalletID: "wallet1",
+			Chain:    "ethereum",
+			Assets: []repository.Asset{
+				{TokenAddress: "0xabc", Symbol: "USDC", Name: "USD Coin", CurrentBalance: "1000", USDValue: 0},
+			},
+			TotalUSDValue: 0,
+		}
+
+		mockRepo.On("GetPortfolioByWalletID", mock.Anything, "wallet1").
+			Return(portfolio, nil).Once()
+		mockRepo.On("EnrichPortfolioWithPrices", mock.Anything, mock.Anything, mock.Anything).
+			Return(errors.New("market-data-service unavailable")).Once()
+
+		req := &pb.GetPortfolioRequest{WalletId: "wallet1"}
+		resp, err := svc.GetPortfolio(context.Background(), req)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, "wallet1", resp.WalletId)
+		assert.Len(t, resp.Assets, 1)
+		assert.Equal(t, float64(0), resp.Assets[0].UsdValue)
+		mockRepo.AssertExpectations(t)
+	})
+}
