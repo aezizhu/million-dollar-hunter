@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -54,6 +55,10 @@ type PortfolioService struct {
 	repo             Repository
 	cfg              config.Config
 	marketDataClient ports.MarketDataClient
+	metrics          interface {
+		IncCounter(name string, labels map[string]string)
+		ObserveDuration(name string, seconds float64, labels map[string]string)
+	}
 }
 
 func New(repo Repository, cfg config.Config, marketDataClient ports.MarketDataClient) *PortfolioService {
@@ -61,8 +66,17 @@ func New(repo Repository, cfg config.Config, marketDataClient ports.MarketDataCl
 		repo:             repo,
 		cfg:              cfg,
 		marketDataClient: marketDataClient,
+		metrics:          nil,
 	}
 }
+func (s *PortfolioService) WithMetrics(rec interface {
+	IncCounter(string, map[string]string)
+	ObserveDuration(string, float64, map[string]string)
+}) *PortfolioService {
+	s.metrics = rec
+	return s
+}
+
 
 func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, raw []byte) error {
 	if err := s.repo.UpsertFromIngest(ctx, raw); err != nil {
@@ -71,6 +85,9 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 
 	var evt repository.TransactionDataIngestedEvent
 	if err := json.Unmarshal(raw, &evt); err != nil {
+		if s.metrics != nil {
+			s.metrics.IncCounter("enrichment.failure", map[string]string{"reason": "unmarshal"})
+		}
 		log.Printf("ingest: unmarshal failed err=%v", err)
 		return err
 	}
@@ -79,6 +96,9 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 
 	balances, walletID, chain, err := s.repo.GetCurrentTokenBalances(ctx, evt.WalletAddress)
 	if err != nil {
+		if s.metrics != nil {
+			s.metrics.IncCounter("enrichment.failure", map[string]string{"reason": "balances", "chain": evt.Chain})
+		}
 		log.Printf("enrich: GetCurrentTokenBalances failed wallet=%s chain=%s err=%v", evt.WalletAddress, evt.Chain, err)
 		return nil
 	}
@@ -102,7 +122,19 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 
 	priceMap := map[string]float64{}
 	if len(tokensByChain) > 0 && s.marketDataClient != nil {
+		start := time.Now()
 		prices, err := s.marketDataClient.GetTokenPrices(ctx, tokensByChain)
+		dur := time.Since(start).Seconds()
+		if s.metrics != nil {
+			s.metrics.ObserveDuration("market_data.request.seconds", dur, map[string]string{
+				"chain": chain,
+			})
+			if err != nil {
+				s.metrics.IncCounter("market_data.request.failure", map[string]string{"chain": chain})
+			} else {
+				s.metrics.IncCounter("market_data.request.success", map[string]string{"chain": chain})
+			}
+		}
 		if err != nil {
 			log.Printf("enrich: GetTokenPrices failed wallet=%s chain=%s tokens=%d err=%v; defaulting price=0", evt.WalletAddress, chain, len(tokensByChain[lchain]), err)
 		} else {
@@ -130,8 +162,14 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 
 	if len(rows) > 0 {
 		if err := s.repo.InsertAssetSnapshots(ctx, rows); err != nil {
+			if s.metrics != nil {
+				s.metrics.IncCounter("enrichment.failure", map[string]string{"reason": "insert", "chain": chain})
+			}
 			log.Printf("enrich: InsertAssetSnapshots failed wallet=%s chain=%s rows=%d err=%v", evt.WalletAddress, chain, len(rows), err)
 			return err
+		}
+		if s.metrics != nil {
+			s.metrics.IncCounter("enrichment.snapshot_writes", map[string]string{"chain": chain})
 		}
 		log.Printf("enrich: snapshot write ok wallet=%s chain=%s rows=%d", evt.WalletAddress, chain, len(rows))
 	}

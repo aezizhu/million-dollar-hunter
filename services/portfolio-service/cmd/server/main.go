@@ -16,6 +16,7 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/client"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/kafka"
+	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/metrics"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/repository"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/service"
 )
@@ -74,7 +75,7 @@ func main() {
 		defer marketDataClient.Close()
 	}
 
-	svc := service.New(db, cfg, marketDataClient)
+	svc := service.New(db, cfg, marketDataClient).WithMetrics(metrics.Noop{})
 
 	consumer, err := kafka.NewConsumer(cfg, svc)
 	if err != nil {
