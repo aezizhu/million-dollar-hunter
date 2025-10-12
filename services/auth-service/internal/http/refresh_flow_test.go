@@ -30,6 +30,7 @@ func (m *memRefresh) CreateRefreshToken(ctx context.Context, userID, token strin
 	m.user[token] = userID
 	return store.RefreshToken{Token: token, UserID: userID, ExpiresAt: expiresAt}, nil
 }
+
 func (m *memRefresh) GetValidRefreshToken(ctx context.Context, token string, now time.Time) (store.RefreshToken, error) {
 	if m.valid == nil {
 		return store.RefreshToken{}, assertErr{}
@@ -40,6 +41,7 @@ func (m *memRefresh) GetValidRefreshToken(ctx context.Context, token string, now
 	}
 	return store.RefreshToken{Token: token, UserID: m.user[token], ExpiresAt: exp}, nil
 }
+
 func (m *memRefresh) RevokeRefreshToken(ctx context.Context, token string) error {
 	if m.valid == nil {
 		m.valid = map[string]time.Time{}
@@ -49,6 +51,7 @@ func (m *memRefresh) RevokeRefreshToken(ctx context.Context, token string) error
 	delete(m.user, token)
 	return nil
 }
+
 func (m *memRefresh) RevokeAllForUser(ctx context.Context, userID string) error {
 	for t, uid := range m.user {
 		if uid == userID {
@@ -67,6 +70,7 @@ func (m *memAudit) Log(ctx context.Context, userID *string, event string, ip *st
 	m.events = append(m.events, event)
 	return nil
 }
+
 func (m *memAudit) CountRecentLoginFailures(ctx context.Context, userID *string, window time.Duration) (int, error) {
 	return 0, nil
 }
@@ -78,6 +82,7 @@ type jwtFixed struct {
 func (f *jwtFixed) GeneratePair(userID, email string) (string, string, time.Time, error) {
 	return f.j.GeneratePair(userID, email)
 }
+
 func (f *jwtFixed) ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, error) {
 	return f.j.ValidateToken(tokenStr, expectedAud)
 }

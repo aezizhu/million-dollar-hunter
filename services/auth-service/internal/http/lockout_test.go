@@ -21,13 +21,17 @@ type auditCount struct {
 func (a *auditCount) Log(ctx context.Context, userID *string, event string, ip *string, meta *string) error {
 	return nil
 }
+
 func (a *auditCount) CountRecentLoginFailures(ctx context.Context, userID *string, window time.Duration) (int, error) {
 	return a.failures, nil
 }
 
 type storeWithPW struct{ hash string }
 
-func (s storeWithPW) Create(ctx context.Context, email, passwordHash string) (store.User, error) { return store.User{}, nil }
+func (s storeWithPW) Create(ctx context.Context, email, passwordHash string) (store.User, error) {
+	return store.User{}, nil
+}
+
 func (s storeWithPW) GetByEmail(ctx context.Context, email string) (store.User, error) {
 	return store.User{ID: "u-1", Email: email, PasswordHash: s.hash}, nil
 }

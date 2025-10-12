@@ -16,9 +16,9 @@ import (
 
 	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/config"
+	grpcserver "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/grpc"
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
-	grpcserver "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/grpc"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
@@ -68,9 +68,9 @@ func main() {
 	s := &httpapi.Server{Logger: &log, JWT: j}
 	if multiUser {
 		dsn := os.Getenv("DATABASE_URL")
-		pool, err := pgxpool.New(context.Background(), dsn)
-		if err != nil {
-			log.Fatal().Err(err).Msg("database connection failed")
+		pool, poolErr := pgxpool.New(context.Background(), dsn)
+		if poolErr != nil {
+			log.Fatal().Err(poolErr).Msg("database connection failed")
 		}
 		pg := &store.PGStore{Pool: pool}
 		s.Store = pg
@@ -85,8 +85,9 @@ func main() {
 	mux.HandleFunc("/api/v1/auth/refresh", s.Refresh)
 
 	httpSrv := &http.Server{
-		Addr:    ":" + cfg.HTTPPort,
-		Handler: hlog.NewHandler(log)(mux),
+		Addr:              ":" + cfg.HTTPPort,
+		Handler:           hlog.NewHandler(log)(mux),
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	grpcSrv := grpc.NewServer()
@@ -94,7 +95,8 @@ func main() {
 
 	grpcLn, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to start gRPC listener")
+		log.Error().Err(err).Msg("failed to start gRPC listener")
+		return
 	}
 
 	go func() {

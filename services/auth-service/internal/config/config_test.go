@@ -14,7 +14,7 @@ func TestParseDefaults(t *testing.T) {
 	if cfg.HTTPPort != "8080" || cfg.GRPCPort != "9090" {
 		t.Fatalf("default ports mismatch: %s %s", cfg.HTTPPort, cfg.GRPCPort)
 	}
-	if string(cfg.JWTSigningKey) == "" {
+	if len(cfg.JWTSigningKey) == 0 {
 		t.Fatalf("expected default signing key")
 	}
 	if cfg.EnableMultiUser {
@@ -58,6 +58,7 @@ func TestParseEnvOverrides(t *testing.T) {
 		t.Fatalf("expected multi-user enabled")
 	}
 }
+
 func TestParseInvalidTTLsFallback(t *testing.T) {
 	os.Setenv("JWT_ACCESS_TTL_MINUTES", "not-a-number")
 	os.Setenv("JWT_REFRESH_TTL_HOURS", "-5")

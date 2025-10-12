@@ -64,3 +64,19 @@ func (s *PGStore) RevokeAllForUser(ctx context.Context, userID string) error {
 	_, err := s.Pool.Exec(ctx, q, userID)
 	return err
 }
+
+func (s *PGStore) StoreRefreshToken(ctx context.Context, userID, token string, expiresAt time.Time) error {
+	_, err := s.CreateRefreshToken(ctx, userID, token, expiresAt)
+	return err
+}
+
+func (s *PGStore) ValidateRefreshToken(ctx context.Context, token string) (bool, string, error) {
+	rt, err := s.GetValidRefreshToken(ctx, token, time.Now())
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return false, "", nil
+		}
+		return false, "", err
+	}
+	return true, rt.UserID, nil
+}

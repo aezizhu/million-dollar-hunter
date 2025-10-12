@@ -133,7 +133,7 @@ func TestValidateToken_CancelledContext(t *testing.T) {
 		ExpectedAud: "aud",
 	})
 	if err != nil {
-		t.Fatalf("unexpected error on cancelled context: %v", err)
+		t.Fatalf("unexpected error on canceled context: %v", err)
 	}
 	if !resp.GetValid() || resp.GetUserId() != "u123" || resp.GetEmail() != "e@example.com" {
 		t.Fatalf("unexpected response: %+v", resp)

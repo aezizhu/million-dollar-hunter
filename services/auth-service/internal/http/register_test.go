@@ -1,4 +1,5 @@
 package httpapi
+
 import (
 	"bytes"
 	"context"
@@ -12,9 +13,6 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
-
-
-
 type fakeStore struct {
 	create func(email, hash string) (store.User, error)
 }
@@ -22,11 +20,10 @@ type fakeStore struct {
 func (f fakeStore) Create(_ context.Context, email, passwordHash string) (store.User, error) {
 	return f.create(email, passwordHash)
 }
+
 func (f fakeStore) GetByEmail(_ context.Context, email string) (store.User, error) {
 	return store.User{}, nil
 }
-
-
 
 func TestRegisterBadJSON(t *testing.T) {
 	_ = os.Setenv("ENABLE_MULTI_USER", "true")
@@ -41,9 +38,6 @@ func TestRegisterBadJSON(t *testing.T) {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
-
-
-
 
 func TestRegisterFlagOff(t *testing.T) {
 	_ = os.Unsetenv("ENABLE_MULTI_USER")
@@ -109,6 +103,7 @@ func TestRegisterWeakPassword(t *testing.T) {
 		t.Fatalf("expected 400, got %d", w.Code)
 	}
 }
+
 func TestRegisterConflict(t *testing.T) {
 	_ = os.Setenv("ENABLE_MULTI_USER", "true")
 	defer os.Unsetenv("ENABLE_MULTI_USER")

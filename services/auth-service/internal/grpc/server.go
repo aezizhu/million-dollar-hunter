@@ -1,3 +1,4 @@
+// Package grpcserver implements the gRPC server for authentication services.
 package grpcserver
 
 import (

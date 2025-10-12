@@ -10,8 +10,8 @@ import (
 )
 
 func TestWithAuthWrongAudience(t *testing.T) {
-	m := jwtmgr.New("iss","aud", time.Minute, time.Hour, []byte("k"))
-	token, _, _ := m.GenerateToken("u","e@x.com", time.Minute)
+	m := jwtmgr.New("iss", "aud", time.Minute, time.Hour, []byte("k"))
+	token, _, _ := m.GenerateToken("u", "e@x.com", time.Minute)
 	h := WithAuth(tv{m}, "other-aud", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	req := httptest.NewRequest("GET", "/x", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -23,7 +23,7 @@ func TestWithAuthWrongAudience(t *testing.T) {
 }
 
 func TestWithAuthMissingHeader(t *testing.T) {
-	m := jwtmgr.New("iss","aud", time.Minute, time.Hour, []byte("k"))
+	m := jwtmgr.New("iss", "aud", time.Minute, time.Hour, []byte("k"))
 	h := WithAuth(tv{m}, "aud", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	req := httptest.NewRequest("GET", "/x", nil)
 	w := httptest.NewRecorder()

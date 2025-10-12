@@ -1,0 +1,113 @@
+linters-settings:
+  govet:
+    check-shadowing: true
+  gocyclo:
+    min-complexity: 15
+  dupl:
+    threshold: 100
+  goconst:
+    min-len: 2
+    min-occurrences: 2
+  misspell:
+    locale: US
+  lll:
+    line-length: 140
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+    disabled-checks:
+      - commentFormatting
+      - ifElseChain
+      - hugeParam
+
+linters:
+  disable-all: true
+  enable:
+    # Strong correctness linters (keep strict)
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - gosimple
+    
+    # Formatting (auto-fixable)
+    - gofmt
+    - goimports
+    
+    # Useful but not critical
+    - bodyclose
+    - gosec
+    - goprintffuncname
+    
+    # Style linters (softened via exclude-rules)
+    - stylecheck
+    - gocritic
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gosec
+    
+    # Soften style-only checks globally
+    - text: "comment on exported"
+      linters:
+        - stylecheck
+        - revive
+    
+    - text: "should have a package comment"
+      linters:
+        - stylecheck
+    
+    - text: "ST1003:"  # Naming conventions
+      linters:
+        - stylecheck
+    
+    # Soften gocritic style suggestions
+    - text: "commentFormatting:"
+      linters:
+        - gocritic
+    
+    - text: "ifElseChain:"
+      linters:
+        - gocritic
+    
+    # Exclude known false positives
+    - text: "G404:"  # Weak random number generator (acceptable for test data)
+      linters:
+        - gosec
+    
+    # Allow embedding interfaces
+    - text: "should not use underscores in Go names"
+      linters:
+        - stylecheck
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  
+  # Exclude typecheck linter (has false positives with workspace modules)
+  exclude-linters:
+    - typecheck
+
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+  skip-linters:
+    - typecheck  # Has false positives with workspace modules
+  
+  # Don't skip any directories by default
+  skip-dirs: []
+  skip-files: []
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true

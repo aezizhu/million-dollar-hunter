@@ -1,3 +1,4 @@
+// Package httpapi provides HTTP middleware for the auth service.
 package httpapi
 
 import (
