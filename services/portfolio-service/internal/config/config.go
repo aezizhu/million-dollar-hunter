@@ -26,7 +26,8 @@ type Config struct {
 	// Logging configuration - reserved for future structured logging implementation
 	LogLevel                     string        `env:"LOG_LEVEL" envDefault:"info"`
 	LogFormat                    string        `env:"LOG_FORMAT" envDefault:"json"`
-	// Observability configuration - reserved for future instrumentation
+	// Observability configuration
 	OTELEndpoint                 string        `env:"OTEL_EXPORTER_OTLP_ENDPOINT" envDefault:""`
 	PrometheusNamespace          string        `env:"PROMETHEUS_NAMESPACE" envDefault:"portfolio_service"`
+	MetricsAddr                  string        `env:"METRICS_ADDR" envDefault:""` // e.g., :9090 to enable /metrics
 }
