@@ -67,11 +67,19 @@ func (m *MockRepo) UserOwnsWallet(ctx context.Context, userID, walletIDOrAddr st
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockRepo) GetCurrentTokenBalances(ctx context.Context, walletIDOrAddr string) ([]repository.TokenBalance, string, string, error) {
+	return nil, "", "", nil
+}
+
+func (m *MockRepo) InsertAssetSnapshots(ctx context.Context, snapshots []repository.AssetSnapshotRow) error {
+	return nil
+}
+
 
 func TestGetPortfolioSummary(t *testing.T) {
 	mockRepo := new(MockRepo)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, nil)
 
 	t.Run("success", func(t *testing.T) {
 		wallets := []repository.WalletSummary{
@@ -110,7 +118,7 @@ func TestGetPortfolioSummary(t *testing.T) {
 func TestGetWalletDetails(t *testing.T) {
 	mockRepo := new(MockRepo)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, nil)
 
 	t.Run("success", func(t *testing.T) {
 		userID := "user123"
@@ -204,7 +212,7 @@ func TestGetWalletDetails(t *testing.T) {
 func TestGetTransactionHistory(t *testing.T) {
 	mockRepo := new(MockRepo)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, nil)
 
 	t.Run("success with pagination", func(t *testing.T) {
 		result := &repository.TransactionResult{
@@ -255,7 +263,7 @@ func TestGetTransactionHistory(t *testing.T) {
 func TestGetPortfolio(t *testing.T) {
 	mockRepo := new(MockRepo)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, nil)
 
 	t.Run("success", func(t *testing.T) {
 		portfolio := &repository.Portfolio{
@@ -293,7 +301,7 @@ func TestGetPortfolio(t *testing.T) {
 func TestExport(t *testing.T) {
 	mockRepo := new(MockRepo)
 	cfg := config.Config{ExportDir: "/tmp/portfolio-exports-test"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, nil)
 
 	t.Run("success JSON export", func(t *testing.T) {
 		userID := "user123"
@@ -427,7 +435,7 @@ func TestExport(t *testing.T) {
 func TestHandleTransactionDataIngested(t *testing.T) {
 	mockRepo := new(MockRepo)
 	cfg := config.Config{ExportDir: "/tmp"}
-	svc := New(mockRepo, cfg)
+	svc := New(mockRepo, cfg, nil)
 
 	t.Run("success", func(t *testing.T) {
 		payload := []byte(`{"wallet_address":"0x123","chain":"ethereum","transactions":[]}`)
