@@ -85,8 +85,9 @@ func main() {
 	mux.HandleFunc("/api/v1/auth/refresh", s.Refresh)
 
 	httpSrv := &http.Server{
-		Addr:    ":" + cfg.HTTPPort,
-		Handler: hlog.NewHandler(log)(mux),
+		Addr:              ":" + cfg.HTTPPort,
+		Handler:           hlog.NewHandler(log)(mux),
+		ReadHeaderTimeout: 30 * time.Second,
 	}
 
 	grpcSrv := grpc.NewServer()
@@ -94,7 +95,8 @@ func main() {
 
 	grpcLn, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to start gRPC listener")
+		log.Error().Err(err).Msg("failed to start gRPC listener")
+		return
 	}
 
 	go func() {
