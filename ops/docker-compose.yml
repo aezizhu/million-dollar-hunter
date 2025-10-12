@@ -107,7 +107,7 @@ services:
       LOCKOUT_WINDOW_MIN: "15"
       LOCKOUT_DURATION_MIN: "15"
       MVP_USERNAME: "aezi"
-      MVP_PASSWORD: "$2a$12$4BoDt8GJsSZcMjuqOecTZu.6zHKOsWi2sRk1M/w8Uz8DSroNcYyzK"
+      MVP_PASSWORD: "Aa@123456789"
     depends_on:
       auth-postgres:
         condition: service_healthy
