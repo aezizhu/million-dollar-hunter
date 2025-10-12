@@ -127,7 +127,7 @@ services:
       dockerfile: services/market-data-service/Dockerfile
     restart: on-failure
     environment:
-      GRPC_ADDR: ":50052"
+      GRPC_PORT: "50052"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
       REDIS_PASSWORD: ""

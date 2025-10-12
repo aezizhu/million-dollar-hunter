@@ -104,8 +104,7 @@ jobs:
       uses: docker/setup-buildx-action@v2
 
     - name: Build Docker image
-      working-directory: services/market-data-service
-      run: docker build -t market-data-service:${{ github.sha }} .
+      run: docker build -t market-data-service:${{ github.sha }} -f services/market-data-service/Dockerfile .
 
   integration-test:
     name: Integration Tests
