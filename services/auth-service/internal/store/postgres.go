@@ -25,6 +25,10 @@ type PGStore struct {
 	Pool *pgxpool.Pool
 }
 
+func New(pool *pgxpool.Pool) *PGStore {
+	return &PGStore{Pool: pool}
+}
+
 func (s *PGStore) Create(ctx context.Context, email, passwordHash string) (User, error) {
 	const q = `INSERT INTO users (email, password_hash) VALUES ($1,$2) RETURNING id, email, password_hash, created_at, updated_at`
 	var u User
