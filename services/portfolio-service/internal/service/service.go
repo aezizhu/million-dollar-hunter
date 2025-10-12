@@ -75,6 +75,8 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 		return err
 	}
 
+	log.Printf("enrich: start wallet=%s chain=%s", evt.WalletAddress, evt.Chain)
+
 	balances, walletID, chain, err := s.repo.GetCurrentTokenBalances(ctx, evt.WalletAddress)
 	if err != nil {
 		log.Printf("enrich: GetCurrentTokenBalances failed wallet=%s chain=%s err=%v", evt.WalletAddress, evt.Chain, err)
@@ -96,6 +98,7 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 		seen[key] = struct{}{}
 		tokensByChain[lchain] = append(tokensByChain[lchain], addr)
 	}
+	log.Printf("enrich: tokens deduped wallet=%s chain=%s tokens=%d", evt.WalletAddress, chain, len(tokensByChain[lchain]))
 
 	priceMap := map[string]float64{}
 	if len(tokensByChain) > 0 && s.marketDataClient != nil {
@@ -130,6 +133,7 @@ func (s *PortfolioService) HandleTransactionDataIngested(ctx context.Context, ra
 			log.Printf("enrich: InsertAssetSnapshots failed wallet=%s chain=%s rows=%d err=%v", evt.WalletAddress, chain, len(rows), err)
 			return err
 		}
+		log.Printf("enrich: snapshot write ok wallet=%s chain=%s rows=%d", evt.WalletAddress, chain, len(rows))
 	}
 	return nil
 }
