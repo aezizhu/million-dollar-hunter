@@ -103,9 +103,7 @@ jobs:
 
     - name: Run linter
       working-directory: services/auth-service
-      env:
-        GOWORK: "off"
-      run: golangci-lint run ./...
+      run: golangci-lint run --config .golangci.yml ./...
 
   build:
     name: Build
