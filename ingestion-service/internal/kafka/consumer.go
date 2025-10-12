@@ -306,7 +306,7 @@ func validateWalletAddress(address, chain string) error {
 		if !solanaAddressRegex.MatchString(address) {
 			return &ValidationError{
 				Field:   "wallet_address",
-				Message: fmt.Sprintf("invalid Solana address format: must be 32-44 base58 characters (got: %s)", address),
+				Message: fmt.Sprintf("invalid Solana address format: must be 43-44 base58 characters (got: %s)", address),
 			}
 		}
 	}
