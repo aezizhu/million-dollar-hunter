@@ -1,10 +1,17 @@
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY services/portfolio-service/go.mod services/portfolio-service/go.sum* ./
-RUN go mod download
-COPY services/portfolio-service/ ./
-COPY proto/ ./proto/
-RUN go build -o /bin/portfolio-service ./cmd/server
+# syntax = docker/dockerfile:1.6
+FROM golang:1.24-alpine AS builder
+WORKDIR /workspace
+COPY go.work go.work.sum* ./
+COPY services/ ./services/
+COPY api-gateway/ ./api-gateway/
+COPY ingestion-service/ ./ingestion-service/
+WORKDIR /workspace/services/portfolio-service
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -o /bin/portfolio-service ./cmd/server
 
 FROM alpine:3.20
 RUN adduser -D appuser

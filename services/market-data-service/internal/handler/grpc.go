@@ -69,9 +69,13 @@ func (h *GRPCHandler) GetTokenPrice(ctx context.Context, req *pb.GetTokenPriceRe
 		}, nil
 	}
 
-	dbPrice, err := h.repo.GetTokenPrice(ctx, req.TokenAddress, req.Chain)
-	if err != nil {
-		h.logger.Error().Err(err).Msg("Database lookup error")
+	var dbPrice *repository.TokenPrice
+	if h.repo != nil {
+		var err error
+		dbPrice, err = h.repo.GetTokenPrice(ctx, req.TokenAddress, req.Chain)
+		if err != nil {
+			h.logger.Error().Err(err).Msg("Database lookup error")
+		}
 	}
 
 	if dbPrice != nil {
@@ -111,8 +115,10 @@ func (h *GRPCHandler) GetTokenPrice(ctx context.Context, req *pb.GetTokenPriceRe
 		PriceChange24h: price.PriceChange24h,
 		LastUpdated:    price.LastUpdated,
 	}
-	if err := h.repo.SaveTokenPrice(ctx, dbPrice); err != nil {
-		h.logger.Error().Err(err).Msg("Failed to save price to database")
+	if h.repo != nil {
+		if err := h.repo.SaveTokenPrice(ctx, dbPrice); err != nil {
+			h.logger.Error().Err(err).Msg("Failed to save price to database")
+		}
 	}
 
 	cachedPrice = &cache.CachedPrice{
@@ -236,8 +242,10 @@ func (h *GRPCHandler) GetTokenPrices(ctx context.Context, req *pb.GetTokenPrices
 				})
 			}
 
-			if err := h.repo.SaveMultipleTokenPrices(ctx, dbPrices); err != nil {
-				h.logger.Error().Err(err).Msg("Failed to save prices to database")
+			if h.repo != nil {
+				if err := h.repo.SaveMultipleTokenPrices(ctx, dbPrices); err != nil {
+					h.logger.Error().Err(err).Msg("Failed to save prices to database")
+				}
 			}
 
 			if err := h.cache.SetMultiplePrices(ctx, cachePrices); err != nil {
@@ -280,9 +288,13 @@ func (h *GRPCHandler) GetMarketData(ctx context.Context, req *pb.GetMarketDataRe
 		}, nil
 	}
 
-	dbPrice, err := h.repo.GetTokenPrice(ctx, req.TokenAddress, req.Chain)
-	if err != nil {
-		h.logger.Error().Err(err).Msg("Database lookup error")
+	var dbPrice *repository.TokenPrice
+	if h.repo != nil {
+		var err error
+		dbPrice, err = h.repo.GetTokenPrice(ctx, req.TokenAddress, req.Chain)
+		if err != nil {
+			h.logger.Error().Err(err).Msg("Database lookup error")
+		}
 	}
 
 	if dbPrice != nil {
@@ -325,8 +337,10 @@ func (h *GRPCHandler) GetMarketData(ctx context.Context, req *pb.GetMarketDataRe
 		PriceChange24h: price.PriceChange24h,
 		LastUpdated:    price.LastUpdated,
 	}
-	if err := h.repo.SaveTokenPrice(ctx, dbPrice); err != nil {
-		h.logger.Error().Err(err).Msg("Failed to save market data to database")
+	if h.repo != nil {
+		if err := h.repo.SaveTokenPrice(ctx, dbPrice); err != nil {
+			h.logger.Error().Err(err).Msg("Failed to save market data to database")
+		}
 	}
 
 	cachedPrice = &cache.CachedPrice{
