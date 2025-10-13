@@ -19,6 +19,7 @@ const (
 type Decision struct {
 	Allowed    bool
 	Dimension  DenialDimension
+	Bottleneck DenialDimension
 	Limit      int
 	Remaining  int
 	Reset      time.Time
@@ -85,20 +86,27 @@ func (h *HierarchicalLimiter) InAllowlist(ipStr string) bool {
 
 func (h *HierarchicalLimiter) Allow(ctx context.Context, ip, userID, route string, bypass bool) Decision {
 	if bypass || h.inAllowlist(ip) {
-		return Decision{Allowed: true, Dimension: DimNone, Limit: 0, Remaining: 0, Reset: time.Now(), RetryAfter: 0}
+		return Decision{Allowed: true, Dimension: DimNone, Bottleneck: DimNone, Limit: 0, Remaining: 0, Reset: time.Now(), RetryAfter: 0}
 	}
 	ipKey := "ratelimit:ip:" + ip
 	ok, lim, rem, reset, retry := h.ipLimiter.Allow(ctx, ipKey)
 	if !ok {
 		return Decision{Allowed: false, Dimension: DimIP, Limit: lim, Remaining: rem, Reset: reset, RetryAfter: retry}
 	}
+	remIP := rem
+
+	var remUser int
+	userChecked := false
 	if userID != "" {
 		uKey := "ratelimit:user:" + userID
 		ok, lim, rem, reset, retry = h.userLimiter.Allow(ctx, uKey)
 		if !ok {
 			return Decision{Allowed: false, Dimension: DimUser, Limit: lim, Remaining: rem, Reset: reset, RetryAfter: retry}
 		}
+		remUser = rem
+		userChecked = true
 	}
+
 	rKey := "ratelimit:route:" + route
 	if userID != "" {
 		rKey += ":" + userID
@@ -107,5 +115,17 @@ func (h *HierarchicalLimiter) Allow(ctx context.Context, ip, userID, route strin
 	if !ok {
 		return Decision{Allowed: false, Dimension: DimRoute, Limit: lim, Remaining: rem, Reset: reset, RetryAfter: retry}
 	}
-	return Decision{Allowed: true, Dimension: DimNone, Limit: lim, Remaining: rem, Reset: reset, RetryAfter: 0}
+	remRoute := rem
+
+	bottleneck := DimRoute
+	minRem := remRoute
+	if userChecked && remUser < minRem {
+		bottleneck = DimUser
+		minRem = remUser
+	}
+	if remIP < minRem {
+		bottleneck = DimIP
+	}
+
+	return Decision{Allowed: true, Dimension: DimNone, Bottleneck: bottleneck, Limit: lim, Remaining: rem, Reset: reset, RetryAfter: 0}
 }
