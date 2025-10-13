@@ -88,10 +88,11 @@ func TestRateLimitMiddleware_WithRedis(t *testing.T) {
 			assert.Equal(t, 200, w.Code)
 		} else {
 			assert.Equal(t, 429, w.Code)
-			h := w.Header()
-			_, hasX := h["X-RateLimit-Limit"]
-			_, hasStd := h["RateLimit-Limit"]
-			assert.True(t, hasX || hasStd, "expected ratelimit header")
+			limitHdr := w.Header().Get("X-RateLimit-Limit")
+			if limitHdr == "" {
+				limitHdr = w.Header().Get("RateLimit-Limit")
+			}
+			assert.NotEmpty(t, limitHdr, "expected ratelimit header")
 			assert.NotEmpty(t, w.Header().Get("Retry-After"))
 		}
 	}
