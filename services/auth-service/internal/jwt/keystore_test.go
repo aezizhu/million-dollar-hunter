@@ -105,8 +105,8 @@ func TestKeyStoreActivation(t *testing.T) {
 		t.Errorf("Active key mismatch: got %s, want %s", activeKey.ID, kid1)
 	}
 
-	if err := ks.ActivateKey(kid2); err != nil {
-		t.Fatalf("Failed to activate second key: %v", err)
+	if actErr := ks.ActivateKey(kid2); actErr != nil {
+		t.Fatalf("Failed to activate second key: %v", actErr)
 	}
 
 	activeKey, err = ks.GetActiveKey()
@@ -232,7 +232,7 @@ func TestKeyStoreFilePersistence(t *testing.T) {
 		t.Fatalf("Failed to generate key: %v", err)
 	}
 
-	if _, err := os.Stat(keystorePath); os.IsNotExist(err) {
+	if _, statErr := os.Stat(keystorePath); os.IsNotExist(statErr) {
 		t.Error("Keystore file was not created")
 	}
 

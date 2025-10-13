@@ -91,8 +91,8 @@ func TestManagerKeyRotation(t *testing.T) {
 		t.Fatalf("Failed to generate second key: %v", err)
 	}
 
-	if err := ks.ActivateKey(kid2); err != nil {
-		t.Fatalf("Failed to activate second key: %v", err)
+	if actErr := ks.ActivateKey(kid2); actErr != nil {
+		t.Fatalf("Failed to activate second key: %v", actErr)
 	}
 
 	token2, _, _, err := mgr.GeneratePair("user456", "test2@example.com")

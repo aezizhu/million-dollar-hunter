@@ -62,20 +62,20 @@ func (m *Manager) GenerateToken(userID, email string, ttl time.Duration) (string
 			ID:        fmt.Sprintf("%d", time.Now().UnixNano()),
 		},
 	}
-	
+
 	if m.keyStore != nil {
 		activeKey, err := m.keyStore.GetActiveKey()
 		if err != nil {
 			return "", time.Time{}, fmt.Errorf("failed to get active key: %w", err)
 		}
-		
+
 		t := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 		t.Header["kid"] = activeKey.ID
-		
+
 		s, err := t.SignedString(activeKey.PrivateKey)
 		return s, exp, err
 	}
-	
+
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	s, err := t.SignedString(m.signingKey)
 	return s, exp, err
@@ -102,7 +102,7 @@ func (m *Manager) GetKeyStore() *KeyStore {
 func (m *Manager) ValidateToken(tokenStr string, expectedAud string) (*Claims, error) {
 	validMethods := []string{jwt.SigningMethodHS256.Alg(), jwt.SigningMethodRS256.Alg()}
 	parser := jwt.NewParser(jwt.WithValidMethods(validMethods))
-	
+
 	token, err := parser.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if m.keyStore != nil {
 			kidRaw, ok := token.Header["kid"]
@@ -118,27 +118,27 @@ func (m *Manager) ValidateToken(tokenStr string, expectedAud string) (*Claims, e
 				return key.PublicKey, nil
 			}
 		}
-		
+
 		if m.signingKey != nil {
 			return m.signingKey, nil
 		}
-		
+
 		return nil, errors.New("no valid signing key found")
 	})
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
 		return nil, errors.New("invalid token")
 	}
-	
+
 	if claims.Issuer != m.issuer {
 		return nil, errors.New("invalid issuer")
 	}
-	
+
 	hasCfg := false
 	for _, aud := range claims.Audience {
 		if aud == m.audience {
@@ -149,7 +149,7 @@ func (m *Manager) ValidateToken(tokenStr string, expectedAud string) (*Claims, e
 	if !hasCfg {
 		return nil, errors.New("token missing required audience")
 	}
-	
+
 	if expectedAud != "" && expectedAud != m.audience {
 		hasExp := false
 		for _, aud := range claims.Audience {
@@ -162,6 +162,6 @@ func (m *Manager) ValidateToken(tokenStr string, expectedAud string) (*Claims, e
 			return nil, fmt.Errorf("token missing expected audience: %s", expectedAud)
 		}
 	}
-	
+
 	return claims, nil
 }
