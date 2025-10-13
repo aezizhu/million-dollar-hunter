@@ -197,6 +197,30 @@ func TestMalformedToken(t *testing.T) {
 	parts := strings.Split("a.b.", ".")
 	_ = parts
 }
+func TestMissingSubClaim(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+			ID:        "nosub",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	s, err := tok.SignedString([]byte("key"))
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected error due to missing sub")
+	}
+}
 func TestNotBeforeInFuture(t *testing.T) {
 	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
 	now := time.Now().UTC()

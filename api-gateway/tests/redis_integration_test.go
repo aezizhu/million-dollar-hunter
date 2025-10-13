@@ -19,6 +19,7 @@ import (
 )
 
 func setupRedis(t *testing.T, ctx context.Context) (testcontainers.Container, *redis.Client) {
+	t.Helper()
 	req := testcontainers.ContainerRequest{
 		Image:        "redis:7-alpine",
 		ExposedPorts: []string{"6379/tcp"},
@@ -41,7 +42,7 @@ func TestRedisTokenBucket_AllowAndBlock(t *testing.T) {
 	}
 	ctx := context.Background()
 	c, rdb := setupRedis(t, ctx)
-	defer testcontainers.TerminateContainer(c)
+	defer c.Terminate(ctx)
 	defer rdb.Close()
 
 	bucket := rl.NewRedisTokenBucket(rdb, 10, 10, time.Second, "it-key")
@@ -70,7 +71,7 @@ func TestRateLimitMiddleware_WithRedis(t *testing.T) {
 	}
 	ctx := context.Background()
 	c, rdb := setupRedis(t, ctx)
-	defer testcontainers.TerminateContainer(c)
+	defer c.Terminate(ctx)
 	defer rdb.Close()
 
 	bucket := rl.NewRedisTokenBucket(rdb, 2, 2, 1*time.Second, "it-key")
@@ -88,11 +89,9 @@ func TestRateLimitMiddleware_WithRedis(t *testing.T) {
 			assert.Equal(t, 200, w.Code)
 		} else {
 			assert.Equal(t, 429, w.Code)
-			limitHdr := w.Header().Get("X-RateLimit-Limit")
-			if limitHdr == "" {
-				limitHdr = w.Header().Get("RateLimit-Limit")
-			}
-			assert.NotEmpty(t, limitHdr, "expected ratelimit header")
+			assert.NotEmpty(t, w.Header().Get("X-RateLimit-Limit"), "expected X-RateLimit-Limit header")
+			assert.NotEmpty(t, w.Header().Get("X-RateLimit-Remaining"), "expected X-RateLimit-Remaining header")
+			assert.NotEmpty(t, w.Header().Get("X-RateLimit-Reset"), "expected X-RateLimit-Reset header")
 			assert.NotEmpty(t, w.Header().Get("Retry-After"))
 		}
 	}

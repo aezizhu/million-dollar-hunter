@@ -106,6 +106,13 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if n >= threshold {
+			limit := threshold
+			remaining := 0
+			resetIn := int((time.Duration(windowMin) * time.Minute).Seconds())
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+			w.Header().Set("X-RateLimit-Reset", strconv.Itoa(resetIn))
+			w.Header().Set("Retry-After", strconv.Itoa(resetIn))
 			http.Error(w, "too many attempts", http.StatusTooManyRequests)
 			return
 		}

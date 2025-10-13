@@ -37,7 +37,7 @@ export function setup() {
 }
 
 function hasRateLimitHeaders(h) {
-  return h['X-RateLimit-Limit'] !== undefined || h['RateLimit-Limit'] !== undefined;
+  return h['X-RateLimit-Limit'] !== undefined && h['X-RateLimit-Remaining'] !== undefined && h['X-RateLimit-Reset'] !== undefined;
 }
 
 export default function () {
