@@ -50,8 +50,8 @@ services:
 
   market-data-service:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../../
+      dockerfile: services/market-data-service/Dockerfile
     container_name: market-data-service
     environment:
       HTTP_PORT: 8080

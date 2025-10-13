@@ -60,7 +60,10 @@ func main() {
 		if err != nil {
 			logger.Error().Err(err).Msg("kafka consumer init failed, continuing without consumer")
 		} else {
-			go consumer.Run(ctx)
+			go func() {
+				svc.SetConsumerReady()
+				consumer.Run(ctx)
+			}()
 			defer func() {
 				if err := consumer.Stop(); err != nil {
 					logger.Error().Err(err).Msg("consumer stop failed")
@@ -72,6 +75,7 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", svc.HealthCheckHandler)
+	mux.HandleFunc("/readyz", svc.ReadyCheckHandler)
 	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
 	srv := &http.Server{

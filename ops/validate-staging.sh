@@ -36,8 +36,8 @@ print_warning() {
 echo "Step 1: Checking service health..."
 echo "-----------------------------------"
 
-docker-compose ps | grep -q "Up" || {
-    echo -e "${RED}Services not running. Start with: docker-compose up -d${NC}"
+docker compose ps | grep -q "Up" || {
+    echo -e "${RED}Services not running. Start with: docker compose up -d${NC}"
     exit 1
 }
 print_status 0 "Docker services are running"

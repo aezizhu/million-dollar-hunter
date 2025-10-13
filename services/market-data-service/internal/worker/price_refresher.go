@@ -85,6 +85,11 @@ func (w *PriceRefresher) refreshPrices(ctx context.Context) {
 	startTime := time.Now()
 	w.logger.Info().Msg("Starting price refresh cycle")
 
+	if w.repo == nil {
+		w.logger.Debug().Msg("Repository not configured, skipping price refresh")
+		return
+	}
+
 	tokens, err := w.repo.GetAllTokenAddresses(ctx)
 	if err != nil {
 		w.logger.Error().Err(err).Msg("Failed to get token addresses")
@@ -145,12 +150,14 @@ func (w *PriceRefresher) refreshPrices(ctx context.Context) {
 				}
 			}
 
-			if err := w.repo.SaveMultipleTokenPrices(ctx, dbPrices); err != nil {
-				w.logger.Error().
-					Err(err).
-					Str("chain", chain).
-					Int("count", len(prices)).
-					Msg("Failed to save prices to database")
+			if w.repo != nil {
+				if err := w.repo.SaveMultipleTokenPrices(ctx, dbPrices); err != nil {
+					w.logger.Error().
+						Err(err).
+						Str("chain", chain).
+						Int("count", len(prices)).
+						Msg("Failed to save prices to database")
+				}
 			}
 
 			cachedPrices := make([]*cache.CachedPrice, len(prices))
@@ -212,8 +219,10 @@ func (w *PriceRefresher) RefreshToken(ctx context.Context, tokenAddress, chain s
 		LastUpdated:    price.LastUpdated,
 	}
 
-	if err := w.repo.SaveTokenPrice(ctx, dbPrice); err != nil {
-		w.logger.Error().Err(err).Msg("Failed to save price to database")
+	if w.repo != nil {
+		if err := w.repo.SaveTokenPrice(ctx, dbPrice); err != nil {
+			w.logger.Error().Err(err).Msg("Failed to save price to database")
+		}
 	}
 
 	cachedPrice := &cache.CachedPrice{

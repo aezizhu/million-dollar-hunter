@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/alchemy"
 	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/breaker"
@@ -24,16 +25,18 @@ import (
 )
 
 type Service struct {
-	cfg            *config.Config
-	logger         zerolog.Logger
-	db             *repository.Postgres
-	alc            *alchemy.Client
-	mor            *moralis.Client
-	sol            *solana.Client
-	jobch          chan models.IngestionJob
-	producer       *kafka.Producer
-	kafkaMetrics   *metrics.KafkaMetrics
-	ingestionMetrics *metrics.IngestionMetrics
+	cfg               *config.Config
+	logger            zerolog.Logger
+	db                *repository.Postgres
+	alc               *alchemy.Client
+	mor               *moralis.Client
+	sol               *solana.Client
+	jobch             chan models.IngestionJob
+	producer          *kafka.Producer
+	kafkaMetrics      *metrics.KafkaMetrics
+	ingestionMetrics  *metrics.IngestionMetrics
+
+	consumerReady atomic.Bool
 }
 
 func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *repository.Postgres, reg *prometheus.Registry) (*Service, error) {
@@ -71,7 +74,7 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 		queueSize = 64
 	}
 
-	return &Service{
+	s := &Service{
 		cfg:              cfg,
 		logger:           logger,
 		db:               db,
@@ -82,7 +85,8 @@ func New(ctx context.Context, cfg *config.Config, logger zerolog.Logger, db *rep
 		producer:         producer,
 		kafkaMetrics:     kafkaMetrics,
 		ingestionMetrics: ingestionMetrics,
-	}, nil
+	}
+	return s, nil
 }
 
 func (s *Service) Enqueue(job models.IngestionJob) error {
@@ -326,23 +330,37 @@ VALUES ($1, $2, $3)
 
 func (s *Service) Close() error {
 	s.logger.Info().Msg("closing service")
-	
+
 	if s.producer != nil {
 		s.logger.Info().Msg("closing kafka producer")
 		if err := s.producer.Close(); err != nil {
 			return fmt.Errorf("close producer: %w", err)
 		}
 	}
-	
+
 	return nil
+}
+
+func (s *Service) Ready() bool {
+	if !s.cfg.KafkaEnabled {
+		return true
+	}
+	if s.producer == nil {
+		return false
+	}
+	return s.consumerReady.Load()
+}
+
+func (s *Service) SetConsumerReady() {
+	s.consumerReady.Store(true)
 }
 
 func (s *Service) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	status := "ok"
 	kafkaStatus := "enabled"
-	
+
 	if s.cfg.KafkaEnabled {
 		if s.producer == nil {
 			status = "degraded"
@@ -351,21 +369,32 @@ func (s *Service) HealthCheckHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		kafkaStatus = "disabled"
 	}
-	
+
 	queueDepth := len(s.jobch)
-	
+
 	response := map[string]interface{}{
-		"status":       status,
-		"kafka":        kafkaStatus,
-		"queue_depth":  queueDepth,
+		"status":         status,
+		"kafka":          kafkaStatus,
+		"queue_depth":    queueDepth,
 		"queue_capacity": cap(s.jobch),
 	}
-	
+
 	statusCode := http.StatusOK
 	if status == "degraded" {
 		statusCode = http.StatusServiceUnavailable
 	}
-	
+
 	w.WriteHeader(statusCode)
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (s *Service) ReadyCheckHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if s.Ready() {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ready":true}`))
+		return
+	}
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(`{"ready":false}`))
 }

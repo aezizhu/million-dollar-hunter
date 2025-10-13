@@ -38,11 +38,19 @@ func main() {
 		Str("http_port", cfg.Server.HTTPPort).
 		Msg("Configuration loaded")
 
-	repo, err := repository.NewRepository(cfg.Database.ConnectionString(), logger)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("Failed to initialize repository")
+	var repo *repository.Repository
+	dbHost := os.Getenv("DB_HOST")
+	if dbHost != "" {
+		var err error
+		repo, err = repository.NewRepository(cfg.Database.ConnectionString(), logger)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("Failed to initialize repository")
+		}
+		defer repo.Close()
+		logger.Info().Msg("Database repository initialized")
+	} else {
+		logger.Info().Msg("Database repository disabled (DB_HOST not set) - using Redis-only mode")
 	}
-	defer repo.Close()
 
 	redisAddr := fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)
 	redisCache, err := cache.NewRedisCache(

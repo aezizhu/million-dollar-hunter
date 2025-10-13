@@ -49,10 +49,11 @@ func NewProducer(ctx context.Context, brokers []string, topic string, logger zer
 	config := sarama.NewConfig()
 	config.Version = sarama.V3_6_0_0
 	config.Producer.Return.Successes = true
-	config.Producer.RequiredAcks = sarama.WaitForLocal
-	config.Producer.Retry.Max = 3
+	config.Producer.RequiredAcks = sarama.WaitForAll
+	config.Producer.Retry.Max = 10 // Increased for idempotent producers to ride out transient broker errors
 	config.Producer.Compression = sarama.CompressionSnappy
 	config.Producer.Idempotent = true
+	config.Net.MaxOpenRequests = 1
 	config.Producer.MaxMessageBytes = 1000000
 
 	producer, err := sarama.NewSyncProducer(brokers, config)
