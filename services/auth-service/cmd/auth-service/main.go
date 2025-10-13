@@ -92,6 +92,24 @@ func main() {
 		s.RefreshTokens = pg
 		s.Audit = pg
 		defer pool.Close()
+		
+		auditRetention := 90 * 24 * time.Hour
+		if retStr := os.Getenv("AUDIT_RETENTION_DAYS"); retStr != "" {
+			if days, parseErr := time.ParseDuration(retStr + "d"); parseErr == nil {
+				auditRetention = days
+			}
+		}
+		go func() {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				if rows, cleanupErr := pg.CleanupOldAudit(context.Background(), auditRetention); cleanupErr != nil {
+					log.Warn().Err(cleanupErr).Msg("audit cleanup failed")
+				} else if rows > 0 {
+					log.Info().Int64("rows", rows).Msg("cleaned up old audit logs")
+				}
+			}
+		}()
 	}
 	mux.HandleFunc("/healthz", s.Health)
 	mux.HandleFunc("/api/v1/auth/login", s.Login)

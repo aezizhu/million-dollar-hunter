@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"regexp"
 	"strings"
 	"time"
@@ -9,46 +10,85 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const (
+	maxScanLength = 1024 * 1024
+)
+
 var (
-	emailRe    = regexp.MustCompile(`([a-zA-Z0-9._%+\-]+)@([a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})`)
-	uuidRe     = regexp.MustCompile(`\b[0-9a-fA-F]{8}\-[0-9a-fA-F]{4}\-[1-5][0-9a-fA-F]{3}\-[89abAB][0-9a-fA-F]{3}\-[0-9a-fA-F]{12}\b`)
-	walletRe   = regexp.MustCompile(`\b0x[0-9a-fA-F]{40}\b`)
-	jwtRe      = regexp.MustCompile(`\beyJ[a-zA-Z0-9_\-]+?\.[a-zA-Z0-9_\-]+?\.[a-zA-Z0-9_\-]+?\b`)
-	passKeysRe = regexp.MustCompile(`(?i)(password|pass|pwd|secret|token|authorization|api_key|api-key)=([^&\s]+)`)
-	ipv4Re     = regexp.MustCompile(`\b(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}\b`)
-	ipv6Re     = regexp.MustCompile(`\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}\b`)
+	emailRe    = regexp.MustCompile(`[a-zA-Z0-9._%+\-]{1,64}@[a-zA-Z0-9.\-]{1,255}\.[a-zA-Z]{2,}`)
+	uuidRe     = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}`)
+	walletRe   = regexp.MustCompile(`0x[0-9a-fA-F]{40}`)
+	jwtRe      = regexp.MustCompile(`eyJ[a-zA-Z0-9_-]{4,}\.[a-zA-Z0-9_-]{4,}\.[a-zA-Z0-9_-]{3,}`)
+	passKeysRe = regexp.MustCompile(`(?i)(password|pass|pwd|secret|token|authorization|api_key|api-key)=[^&\n\r]{1,256}`)
 )
 
 func maskIP(ip string) string {
 	if ip == "" {
 		return ip
 	}
-	return ipv4Re.ReplaceAllString(ip, `$1.xxx`)
-}
-
-func scrubIPv6(s string) string {
-	return ipv6Re.ReplaceAllStringFunc(s, func(m string) string {
-		i := strings.LastIndex(m, ":")
-		if i == -1 {
-			return m
+	
+	parsed := net.ParseIP(ip)
+	if parsed == nil {
+		return ip
+	}
+	
+	if parsed.To4() != nil {
+		parts := strings.Split(ip, ".")
+		if len(parts) == 4 {
+			return parts[0] + "." + parts[1] + "." + parts[2] + ".xxx"
 		}
-		return m[:i+1] + "xxxx"
-	})
+	} else {
+		idx := strings.LastIndex(ip, ":")
+		if idx != -1 {
+			return ip[:idx+1] + "xxxx"
+		}
+	}
+	
+	return ip
 }
 
 func scrubString(s string) string {
-	if s == "" {
+	if s == "" || len(s) > maxScanLength {
 		return s
 	}
+	
 	out := s
-	out = passKeysRe.ReplaceAllString(out, `${1}=[redacted]`)
+	out = passKeysRe.ReplaceAllStringFunc(out, func(match string) string {
+		eqIdx := strings.Index(match, "=")
+		if eqIdx > 0 {
+			return match[:eqIdx+1] + "[redacted]"
+		}
+		return match
+	})
 	out = jwtRe.ReplaceAllString(out, "[redacted_jwt]")
 	out = emailRe.ReplaceAllString(out, "user@***")
 	out = walletRe.ReplaceAllString(out, "[redacted_wallet]")
 	out = uuidRe.ReplaceAllString(out, "[redacted_id]")
-	out = ipv4Re.ReplaceAllString(out, `$1.xxx`)
-	out = scrubIPv6(out)
-	return out
+	
+	// Mask IPs using net.ParseIP - scan character by character
+	var result strings.Builder
+	result.Grow(len(out))
+	i := 0
+	for i < len(out) {
+		if (i < len(out) && out[i] >= '0' && out[i] <= '9') || (i+1 < len(out) && out[i:i+2] == "::") {
+			j := i
+			for j < len(out) && (out[j] >= '0' && out[j] <= '9' || out[j] == '.' || out[j] == ':' || (out[j] >= 'a' && out[j] <= 'f') || (out[j] >= 'A' && out[j] <= 'F')) {
+				j++
+			}
+			if j > i {
+				candidate := out[i:j]
+				if parsed := net.ParseIP(candidate); parsed != nil {
+					result.WriteString(maskIP(candidate))
+					i = j
+					continue
+				}
+			}
+		}
+		result.WriteByte(out[i])
+		i++
+	}
+	
+	return result.String()
 }
 
 func safeUserAgent(ua string) string {
@@ -60,11 +100,7 @@ func safePath(path, raw string) string {
 	if raw != "" {
 		p = p + "?" + raw
 	}
-	p = scrubString(p)
-	if strings.Contains(strings.ToLower(p), "authorization=") {
-		p = passKeysRe.ReplaceAllString(p, `${1}=[redacted]`)
-	}
-	return p
+	return scrubString(p)
 }
 
 func Logging(logger zerolog.Logger) gin.HandlerFunc {

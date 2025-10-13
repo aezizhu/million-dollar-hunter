@@ -1,6 +1,17 @@
 {
+  "uid": "auth-slo-dashboard",
   "title": "Auth SLO Dashboard",
+  "tags": ["auth", "slo", "observability"],
   "timezone": "browser",
+  "editable": true,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
   "panels": [
     {
       "type": "graph",

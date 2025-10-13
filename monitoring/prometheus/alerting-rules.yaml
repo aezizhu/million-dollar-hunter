@@ -15,9 +15,9 @@ groups:
     interval: 5m
     rules:
       - record: auth:requests_total_30d
-        expr: sum_over_time(auth_grpc_validation_total[30d])
+        expr: increase(auth_grpc_validation_total[30d])
       - record: auth:errors_total_30d
-        expr: sum_over_time((auth_grpc_validation_total{outcome="error"})[30d])
+        expr: increase(auth_grpc_validation_total{outcome="error"}[30d])
       - record: auth:error_rate_30d
         expr: auth:errors_total_30d / ignoring(outcome) auth:requests_total_30d
       - record: auth:error_budget_remaining_30d
