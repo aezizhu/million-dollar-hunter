@@ -22,20 +22,6 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/ratelimit"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
 )
-func securityHeadersMiddleware(cfg config.Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if cfg.EnableHSTS {
-			c.Header(headers.StrictTransportSecurity, "max-age=31536000; includeSubDomains")
-		}
-		c.Header(headers.XContentTypeOptions, "nosniff")
-		c.Header(headers.ReferrerPolicy, "strict-origin-when-cross-origin")
-		c.Header(headers.XFrameOptions, "DENY")
-		if cfg.CSPPolicy != "" {
-			c.Header(headers.ContentSecurityPolicy, cfg.CSPPolicy)
-		}
-		c.Next()
-	}
-}
 
 
 func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
@@ -112,6 +98,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+	r.Use(middleware.SecurityHeaders(cfg))
 
 	r.Use(func(c *gin.Context) {
 		rid := c.GetHeader(headers.RequestID)
@@ -124,7 +111,6 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 	})
 
 	r.Use(middleware.Logging(logger))
-	r.Use(securityHeadersMiddleware(cfg))
 
 	limiter := newLimiter(cfg, logger)
 

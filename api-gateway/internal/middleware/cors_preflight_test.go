@@ -3,6 +3,22 @@ package middleware_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/server"
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
+)
+
+package middleware_test
+
+import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
@@ -83,7 +99,25 @@ func TestCORSPreflight_DisallowedOrigin(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" && got != "http://evil.example" {
-		t.Fatalf("unexpected Allow-Origin for disallowed origin: %q", got)
+	if got := w.Header().Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("expected empty Allow-Origin for disallowed origin, got %q", got)
+	}
+	vary := w.Header().Values("Vary")
+	hasOrigin := false
+	for _, v := range vary {
+		for _, part := range http.CanonicalHeaderKey(v) {
+			_ = part
+		}
+		if v == "Origin" || v == "origin" || v == "ORIGIN" {
+			hasOrigin = true
+			break
+		}
+		if strings.Contains(v, "Origin") {
+			hasOrigin = true
+			break
+		}
+	}
+	if !hasOrigin {
+		t.Fatalf("expected Vary to include Origin, got %v", vary)
 	}
 }
