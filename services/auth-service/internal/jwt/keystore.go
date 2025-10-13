@@ -91,8 +91,8 @@ func (ks *KeyStore) GenerateKey(bitSize int, active bool, expiresIn time.Duratio
 	ks.mu.Unlock()
 
 	if ks.filePath != "" {
-		if err := ks.saveToFile(); err != nil {
-			return "", fmt.Errorf("failed to save keystore: %w", err)
+		if saveErr := ks.saveToFile(); saveErr != nil {
+			return "", fmt.Errorf("failed to save keystore: %w", saveErr)
 		}
 	}
 
@@ -147,8 +147,8 @@ func (ks *KeyStore) ActivateKey(kid string) error {
 	key.Active = true
 
 	if ks.filePath != "" {
-		if err := ks.saveToFile(); err != nil {
-			return fmt.Errorf("failed to save keystore: %w", err)
+		if saveErr := ks.saveToFile(); saveErr != nil {
+			return fmt.Errorf("failed to save keystore: %w", saveErr)
 		}
 	}
 
@@ -188,8 +188,8 @@ func (ks *KeyStore) CleanupExpiredKeys() (int, error) {
 	}
 
 	if removed > 0 && ks.filePath != "" {
-		if err := ks.saveToFile(); err != nil {
-			return removed, fmt.Errorf("failed to save keystore after cleanup: %w", err)
+		if saveErr := ks.saveToFile(); saveErr != nil {
+			return removed, fmt.Errorf("failed to save keystore after cleanup: %w", saveErr)
 		}
 	}
 
