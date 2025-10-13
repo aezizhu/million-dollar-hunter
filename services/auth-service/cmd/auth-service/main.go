@@ -20,8 +20,8 @@ import (
 	grpcserver "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/grpc"
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
-	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 	authsecrets "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/secrets"
+	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
 type jwtSecret struct {
