@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"os"
@@ -20,7 +21,13 @@ import (
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
+	authsecrets "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/secrets"
 )
+
+type jwtSecret struct {
+	KID string `json:"kid"`
+	Key string `json:"key"`
+}
 
 func main() {
 	log := zerolog.New(os.Stdout).With().Timestamp().Logger()
@@ -62,7 +69,83 @@ func main() {
 		log.Info().Msg("Running in multi-user mode")
 	}
 
-	j := jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
+	var secClient authsecrets.Client
+	switch strings.ToLower(os.Getenv("SECRETS_PROVIDER")) {
+	case "aws":
+		region := os.Getenv("AWS_REGION")
+		awsClient, awsErr := authsecrets.NewAWS(context.Background(), authsecrets.AWSConfig{
+			Config: authsecrets.Config{
+				CacheTTL:        time.Hour,
+				RefreshInterval: time.Minute,
+			},
+			Region: region,
+		})
+		if awsErr != nil {
+			log.Error().Err(awsErr).Msg("failed to init AWS secrets client, falling back to env")
+			secClient = authsecrets.NewEnv(authsecrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
+		} else {
+			secClient = awsClient
+		}
+	default:
+		secClient = authsecrets.NewEnv(authsecrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
+	}
+	if secClient != nil {
+		secClient.StartBackgroundRefresh(context.Background())
+	}
+
+	keys := cfg.JWTKeys
+	currentKID := cfg.JWTCurrentKID
+
+	secretPrefix := os.Getenv("SECRETS_PREFIX")
+	if secretPrefix == "" {
+		env := os.Getenv("ENV")
+		if env == "" {
+			env = "dev"
+		}
+		secretPrefix = "mdh/" + env + "/auth/jwt"
+	}
+	if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
+		var cur jwtSecret
+		if err := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); err == nil && cur.KID != "" && cur.Key != "" {
+			if keys == nil {
+				keys = map[string][]byte{}
+			}
+			keys[cur.KID] = []byte(cur.Key)
+			currentKID = cur.KID
+		}
+		var prev jwtSecret
+		if err := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); err == nil && prev.KID != "" && prev.Key != "" {
+			if keys == nil {
+				keys = map[string][]byte{}
+			}
+			keys[prev.KID] = []byte(prev.Key)
+		}
+	}
+
+	var j *jwtmgr.Manager
+	if currentKID != "" && len(keys) > 0 {
+		j = jwtmgr.NewWithKeys(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, keys, currentKID)
+	} else {
+		j = jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
+	}
+
+	if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
+		go func() {
+			t := time.NewTicker(1 * time.Minute)
+			defer t.Stop()
+			for range t.C {
+				var cur jwtSecret
+				if err := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); err == nil && cur.KID != "" && cur.Key != "" {
+					nk := map[string][]byte{cur.KID: []byte(cur.Key)}
+					var prev jwtSecret
+					if err := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); err == nil && prev.KID != "" && prev.Key != "" {
+						nk[prev.KID] = []byte(prev.Key)
+					}
+					j.UpdateKeys(nk, cur.KID)
+				}
+			}
+		}()
+	}
 
 	mux := http.NewServeMux()
 	s := &httpapi.Server{Logger: &log, JWT: j}
@@ -78,7 +161,21 @@ func main() {
 		s.Audit = pg
 		defer pool.Close()
 	}
-	mux.HandleFunc("/healthz", s.Health)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		type health struct {
+			OK            bool   `json:"ok"`
+			SecretsStatus string `json:"secrets"`
+		}
+		h := health{OK: true, SecretsStatus: "disabled"}
+		if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
+			if err := secClient.Health(r.Context()); err != nil {
+				h.SecretsStatus = "degraded"
+			} else {
+				h.SecretsStatus = "ok"
+			}
+		}
+		_ = json.NewEncoder(w).Encode(h)
+	})
 	mux.HandleFunc("/api/v1/auth/login", s.Login)
 	mux.HandleFunc("/api/v1/auth/register", s.Register)
 	mux.HandleFunc("/api/v1/auth/logout", s.Logout)
