@@ -23,6 +23,7 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
 )
 
+
 func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
 	var (
 		base ratelimit.SimpleLimiter
@@ -88,6 +89,10 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		c.Set("auth_grpc_metrics", authMetrics)
 		c.Next()
 	})
+	r.Use(func(c *gin.Context) {
+		c.Header("Vary", "Origin")
+		c.Next()
+	})
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.FrontendURL},
@@ -97,6 +102,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+	r.Use(middleware.SecurityHeaders(cfg))
 
 	r.Use(func(c *gin.Context) {
 		rid := c.GetHeader(headers.RequestID)
@@ -130,6 +136,16 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		c.JSON(status, health)
 	})
 	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin == cfg.FrontendURL {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
+		c.Header("Vary", "Origin")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, "+headers.RequestID)
+		c.Status(http.StatusNoContent)
+	})
 
 	r.POST("/api/v1/auth/login", handlers.Login(cfg))
 	r.POST("/api/v1/auth/refresh", handlers.Refresh(cfg))

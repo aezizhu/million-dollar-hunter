@@ -28,6 +28,15 @@ type Config struct {
 	OpenAPIPath             string
 	RouteLimitsJSON         string
 	StrictOpenAPIValidation bool
+	EnableHSTS              bool
+	HSTSEnabled             bool
+	HSTSMaxAge              int
+	HSTSIncludeSubdomains   bool
+	HSTSPreload             bool
+	CSPPolicy               string
+	CORP                    string
+	COOP                    string
+	PermissionsPolicy       string
 }
 
 func getenv(k, d string) string {
@@ -59,6 +68,7 @@ func getenvBool(k string, d bool) bool {
 }
 
 func Load() Config {
+	hstsEnabled := getenvBool("HSTS_ENABLED", getenvBool("ENABLE_HSTS", false))
 	return Config{
 		Port:                    getenv("PORT", "8080"),
 		RedisURL:                getenv("REDIS_URL", "localhost:6379"),
@@ -82,5 +92,14 @@ func Load() Config {
 		OpenAPIPath:             getenv("OPENAPI_PATH", "../docs/openapi.yaml"),
 		RouteLimitsJSON:         os.Getenv("ROUTE_LIMITS"),
 		StrictOpenAPIValidation: getenvBool("STRICT_OPENAPI_VALIDATION", false),
+		EnableHSTS:              getenvBool("ENABLE_HSTS", false),
+		HSTSEnabled:             hstsEnabled,
+		HSTSMaxAge:              getenvInt("HSTS_MAX_AGE", 15552000),
+		HSTSIncludeSubdomains:   getenvBool("HSTS_INCLUDE_SUBDOMAINS", false),
+		HSTSPreload:             getenvBool("HSTS_PRELOAD", false),
+		CSPPolicy:               getenv("CSP_POLICY", ""),
+		CORP:                    getenv("CROSS_ORIGIN_RESOURCE_POLICY", ""),
+		COOP:                    getenv("CROSS_ORIGIN_OPENER_POLICY", ""),
+		PermissionsPolicy:       getenv("PERMISSIONS_POLICY", ""),
 	}
 }
