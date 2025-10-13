@@ -27,6 +27,7 @@ func newHierLimiter(cfg config.Config, logger zerolog.Logger) *ratelimit.Hierarc
 	var rdb *redis.Client
 	var ipLim, userLim, routeBase ratelimit.SimpleLimiter
 
+
 	if cfg.RedisURL != "" {
 		opts := &redis.Options{Addr: cfg.RedisURL}
 		rdb = redis.NewClient(opts)
@@ -103,6 +104,10 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		c.Next()
 	})
 	r.SetTrustedProxies([]string{"127.0.0.1/32"})
+	r.Use(func(c *gin.Context) {
+		c.Header("Vary", "Origin")
+		c.Next()
+	})
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.FrontendURL},
@@ -112,6 +117,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+	r.Use(middleware.SecurityHeaders(cfg))
 
 	r.Use(func(c *gin.Context) {
 		rid := c.GetHeader(headers.RequestID)
@@ -145,6 +151,16 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		c.JSON(status, health)
 	})
 	r.GET("/metrics", gin.WrapH(promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
+	r.OPTIONS("/*path", func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin == cfg.FrontendURL {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
+		c.Header("Vary", "Origin")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type, "+headers.RequestID)
+		c.Status(http.StatusNoContent)
+	})
 
 	r.POST("/api/v1/auth/login", handlers.Login(cfg))
 	r.POST("/api/v1/auth/refresh", handlers.Refresh(cfg))

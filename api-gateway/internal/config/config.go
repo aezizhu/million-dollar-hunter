@@ -37,6 +37,15 @@ type Config struct {
 	IPRateLimitBurst      int
 	UserRateLimitRPS      int
 	UserRateLimitBurst    int
+	EnableHSTS              bool
+	HSTSEnabled             bool
+	HSTSMaxAge              int
+	HSTSIncludeSubdomains   bool
+	HSTSPreload             bool
+	CSPPolicy               string
+	CORP                    string
+	COOP                    string
+	PermissionsPolicy       string
 }
 
 func getenv(k, d string) string {
@@ -68,6 +77,7 @@ func getenvBool(k string, d bool) bool {
 }
 
 func Load() Config {
+	hstsEnabled := getenvBool("HSTS_ENABLED", getenvBool("ENABLE_HSTS", false))
 	return Config{
 		Port:                    getenv("PORT", "8080"),
 		RedisURL:                getenv("REDIS_URL", "localhost:6379"),
@@ -98,6 +108,15 @@ func Load() Config {
 		IPRateLimitBurst:      getenvInt("IP_RATE_LIMIT_BURST", 0),
 		UserRateLimitRPS:      getenvInt("USER_RATE_LIMIT_RPS", 0),
 		UserRateLimitBurst:    getenvInt("USER_RATE_LIMIT_BURST", 0),
+		EnableHSTS:              getenvBool("ENABLE_HSTS", false),
+		HSTSEnabled:             hstsEnabled,
+		HSTSMaxAge:              getenvInt("HSTS_MAX_AGE", 15552000),
+		HSTSIncludeSubdomains:   getenvBool("HSTS_INCLUDE_SUBDOMAINS", false),
+		HSTSPreload:             getenvBool("HSTS_PRELOAD", false),
+		CSPPolicy:               getenv("CSP_POLICY", ""),
+		CORP:                    getenv("CROSS_ORIGIN_RESOURCE_POLICY", ""),
+		COOP:                    getenv("CROSS_ORIGIN_OPENER_POLICY", ""),
+		PermissionsPolicy:       getenv("PERMISSIONS_POLICY", ""),
 	}
 }
 
