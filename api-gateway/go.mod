@@ -17,8 +17,6 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.5.3
 	github.com/rs/zerolog v1.33.0
-	github.com/stretchr/testify v1.11.1
-	github.com/testcontainers/testcontainers-go v0.39.0
 	go.opentelemetry.io/otel v1.37.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.28.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.28.0
@@ -138,6 +136,10 @@ replace (
 	github.com/aezizhu/million-dollar-hunter/services/portfolio-service => ../services/portfolio-service
 )
 
-require github.com/aezizhu/million-dollar-hunter/pkg/secrets v0.0.0-00010101000000-000000000000
+require (
+	github.com/aezizhu/million-dollar-hunter/pkg/secrets v0.0.0-00010101000000-000000000000
+	github.com/stretchr/testify v1.11.1
+	github.com/testcontainers/testcontainers-go v0.39.0
+)
 
 replace github.com/aezizhu/million-dollar-hunter/pkg/secrets => ../pkg/secrets
