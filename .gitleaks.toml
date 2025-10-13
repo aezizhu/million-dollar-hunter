@@ -1,0 +1,11 @@
+title = "million-dollar-hunter gitleaks config"
+
+[allowlist]
+description = "Allow common test secrets and localhost"
+regexes = [
+  '''(?i)dummy|test|example|sample|placeholder''',
+  '''127\.0\.0\.1|localhost'''
+]
+
+[rules]
+# Use default gitleaks rules; no custom rules added.

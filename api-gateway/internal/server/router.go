@@ -165,7 +165,9 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 	r.POST("/api/v1/auth/login", handlers.Login(cfg))
 	r.POST("/api/v1/auth/refresh", handlers.Refresh(cfg))
 
+
 	api := r.Group("/api/v1")
+	// Auth must run before rate limiting so unauthenticated requests do not consume rate limit quota.
 	api.Use(middleware.Metrics(httpMetrics))
 	api.Use(middleware.Auth(cfg, grpcClients.AuthConn))
 	api.Use(middleware.RateLimitHier(hierLimiter, cfg))
