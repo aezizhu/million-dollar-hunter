@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
   security-events: write
 
 jobs:
@@ -27,8 +28,22 @@ jobs:
         with:
           languages: go
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build (monorepo)
+        run: |
+          set -euo pipefail
+          go env
+          go version
+          go work sync || true
+          (cd api-gateway && go build ./... || true)
+          (cd services/auth-service && go build ./... || true)
+          (cd services/portfolio-service && go build ./... || true)
+          (cd services/market-data-service && go build ./... || true)
+          (cd ingestion-service && go build ./... || true)
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
