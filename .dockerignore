@@ -1,5 +1,34 @@
-node_modules
+# VCS
 .git
 .gitignore
+.gitattributes
+
+# Node/Frontend
+node_modules
+**/node_modules
+.npm
+.yarn
+.pnpm-store
+.next
+out
+coverage
+*.log
+
+# Go
+**/bin
+**/dist
+**/build
+**/.cache
+**/coverage
+
+# Docker/ops artifacts
+ops/*.txt
+ops/*.log
+ops/*_REPORT.md
+
+# Env/Secrets
 .env
 .env.*
+*.env
+*.secret
+secrets/*
