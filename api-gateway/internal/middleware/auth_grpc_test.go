@@ -260,6 +260,7 @@ func TestAuth_GRPCMode_FallbackToLocal_JWT_Succeeds(t *testing.T) {
 	claims := jwt.MapClaims{
 		"sub": "u-local",
 		"exp": time.Now().Add(5 * time.Minute).Unix(),
+		"aud": "aud",
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenStr, err := tok.SignedString([]byte("devsecret"))
