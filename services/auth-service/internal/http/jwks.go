@@ -25,13 +25,15 @@ type JWK struct {
 }
 
 func (s *Server) JWKS(w http.ResponseWriter, r *http.Request) {
-	ks, ok := s.JWT.(*jwtmgr.Manager)
+	type keystoreProvider interface {
+		GetKeyStore() *jwtmgr.KeyStore
+	}
+	kp, ok := any(s.JWT).(keystoreProvider)
 	if !ok {
-		http.Error(w, "invalid JWT manager type", http.StatusInternalServerError)
+		http.Error(w, "JWKS not supported in legacy mode", http.StatusNotImplemented)
 		return
 	}
-
-	keyStore := ks.GetKeyStore()
+	keyStore := kp.GetKeyStore()
 	if keyStore == nil {
 		http.Error(w, "JWKS not supported in legacy mode", http.StatusNotImplemented)
 		return

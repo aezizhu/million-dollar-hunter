@@ -62,7 +62,22 @@ func main() {
 		log.Info().Msg("Running in multi-user mode")
 	}
 
-	j := jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
+	var j interface {
+		GeneratePair(userID, email string) (string, string, time.Time, error)
+		ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, error)
+	}
+
+	if keystorePath := os.Getenv("KEYSTORE_PATH"); keystorePath != "" {
+		ks, kerr := jwtmgr.NewKeyStore(keystorePath)
+		if kerr != nil {
+			log.Fatal().Err(kerr).Str("path", keystorePath).Msg("failed to load keystore")
+		}
+		j = jwtmgr.NewWithKeyStore(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, ks)
+		log.Info().Str("keystore", keystorePath).Msg("Using RS256 keystore mode")
+	} else {
+		j = jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
+		log.Info().Msg("Using HS256 legacy mode")
+	}
 
 	mux := http.NewServeMux()
 	s := &httpapi.Server{Logger: &log, JWT: j}
