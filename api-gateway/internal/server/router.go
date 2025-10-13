@@ -83,15 +83,6 @@ func newHierLimiter(cfg config.Config, logger zerolog.Logger) *ratelimit.Hierarc
 	return ratelimit.NewHierarchicalLimiter(ipLim, userLim, routeLim, cfg.RateLimitAllowlist)
 }
 
-type limiterAdapter struct {
-	rl interface {
-		Allow(ctx context.Context, key string) (bool, int, int, time.Time, time.Duration)
-	}
-}
-
-func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Duration) {
-	return l.rl.Allow(context.Background(), key)
-}
 
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) *clients.GRPCClients {
 	if cfg.AuthValidateMode == "grpc" {
@@ -102,6 +93,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 			logger.Fatal().Msg("JWT_AUDIENCE is required when AUTH_VALIDATE_MODE=grpc")
 		}
 	}
+	cfg.Validate(logger)
 	grpcClients := clients.NewGRPCClients(cfg.PortfolioServiceURL, cfg.MarketDataServiceURL, cfg.AuthGRPCAddr, logger)
 
 	httpMetrics := observability.NewHTTPMetrics(reg, cfg.PrometheusNamespace)
@@ -111,6 +103,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		c.Set("auth_grpc_metrics", authMetrics)
 		c.Next()
 	})
+	r.SetTrustedProxies([]string{"127.0.0.1/32"})
 
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{cfg.FrontendURL},
@@ -159,8 +152,8 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 
 	api := r.Group("/api/v1")
 	api.Use(middleware.Metrics(httpMetrics))
-	api.Use(middleware.RateLimitHier(hierLimiter, cfg))
 	api.Use(middleware.Auth(cfg, grpcClients.AuthConn))
+	api.Use(middleware.RateLimitHier(hierLimiter, cfg))
 	api.Use(middleware.Tracing())
 
 	var portfolioConn, marketDataConn *grpc.ClientConn

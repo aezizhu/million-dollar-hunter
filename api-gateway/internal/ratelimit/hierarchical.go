@@ -3,7 +3,6 @@ package ratelimit
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"net"
 	"time"
 )
@@ -36,12 +35,7 @@ type HierarchicalLimiter struct {
 func NewHierarchicalLimiter(ipLim, userLim, routeLim SimpleLimiter, allowlistJSON string) *HierarchicalLimiter {
 	var entries []string
 	if allowlistJSON != "" {
-		if err := json.Unmarshal([]byte(allowlistJSON), &entries); err != nil {
-			log.Printf("invalid RATE_LIMIT_ALLOWLIST JSON: %v", err)
-			entries = nil
-		} else if len(entries) == 0 {
-			log.Printf("RATE_LIMIT_ALLOWLIST parsed but is empty")
-		}
+		_ = json.Unmarshal([]byte(allowlistJSON), &entries)
 	}
 	cidrs := parseCIDRs(entries)
 	return &HierarchicalLimiter{ipLimiter: ipLim, userLimiter: userLim, routeLimiter: routeLim, allowCIDRs: cidrs}
@@ -83,6 +77,10 @@ func (h *HierarchicalLimiter) inAllowlist(ipStr string) bool {
 		}
 	}
 	return false
+}
+
+func (h *HierarchicalLimiter) InAllowlist(ipStr string) bool {
+	return h.inAllowlist(ipStr)
 }
 
 func (h *HierarchicalLimiter) Allow(ctx context.Context, ip, userID, route string, bypass bool) Decision {

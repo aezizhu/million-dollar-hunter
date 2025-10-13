@@ -16,12 +16,12 @@ func RateLimitHier(h *ratelimit.HierarchicalLimiter, cfg config.Config) gin.Hand
 	return func(c *gin.Context) {
 		route := c.FullPath()
 		if route == "" {
-			route = c.Request.URL.Path
+			route = "unknown"
 		}
 		uid := c.GetString("user_id")
 		ip := c.ClientIP()
 		bypass := false
-		if cfg.RateLimitBypassHeader != "" && c.GetHeader(cfg.RateLimitBypassHeader) != "" {
+		if cfg.RateLimitBypassHeader != "" && c.GetHeader(cfg.RateLimitBypassHeader) != "" && h.InAllowlist(ip) {
 			bypass = true
 		}
 
@@ -51,7 +51,7 @@ func RateLimitHier(h *ratelimit.HierarchicalLimiter, cfg config.Config) gin.Hand
 		}
 		if v, exists := c.Get("http_metrics"); exists {
 			if m, ok := v.(*observability.HTTPMetrics); ok && m != nil {
-				m.RateLimitAllowed.WithLabelValues(route, "route").Inc()
+				m.RateLimitAllowed.WithLabelValues(route, "none").Inc()
 			}
 		}
 		c.Next()

@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"strconv"
+
+	"github.com/rs/zerolog"
 )
 
 type Config struct {
@@ -97,4 +99,28 @@ func Load() Config {
 		UserRateLimitRPS:      getenvInt("USER_RATE_LIMIT_RPS", 0),
 		UserRateLimitBurst:    getenvInt("USER_RATE_LIMIT_BURST", 0),
 	}
+}
+func (c Config) Validate(logger zerolog.Logger) {
+	if c.IPRateLimitRPS < 0 {
+		logger.Warn().Str("env", "IP_RATE_LIMIT_RPS").Msg("negative value; treating as 0 (inherit defaults)")
+	}
+	if c.IPRateLimitBurst < 0 {
+		logger.Warn().Str("env", "IP_RATE_LIMIT_BURST").Msg("negative value; treating as 0 (inherit defaults)")
+	}
+	if c.UserRateLimitRPS < 0 {
+		logger.Warn().Str("env", "USER_RATE_LIMIT_RPS").Msg("negative value; treating as 0 (inherit defaults)")
+	}
+	if c.UserRateLimitBurst < 0 {
+		logger.Warn().Str("env", "USER_RATE_LIMIT_BURST").Msg("negative value; treating as 0 (inherit defaults)")
+	}
+	if c.IPRateLimitBurst > 0 && c.IPRateLimitRPS > c.IPRateLimitBurst {
+		logger.Warn().Int("rps", c.IPRateLimitRPS).Int("burst", c.IPRateLimitBurst).Msg("IP_RATE_LIMIT_RPS exceeds IP_RATE_LIMIT_BURST")
+	}
+	if c.UserRateLimitBurst > 0 && c.UserRateLimitRPS > c.UserRateLimitBurst {
+		logger.Warn().Int("rps", c.UserRateLimitRPS).Int("burst", c.UserRateLimitBurst).Msg("USER_RATE_LIMIT_RPS exceeds USER_RATE_LIMIT_BURST")
+	}
+	logger.Info().
+		Int("ip_rps", c.IPRateLimitRPS).Int("ip_burst", c.IPRateLimitBurst).
+		Int("user_rps", c.UserRateLimitRPS).Int("user_burst", c.UserRateLimitBurst).
+		Msg("effective rate limits")
 }
