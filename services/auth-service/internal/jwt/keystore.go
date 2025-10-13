@@ -17,21 +17,21 @@ import (
 )
 
 type SigningKey struct {
-	ID         string           `json:"id"`
-	Algorithm  string           `json:"algorithm"`
-	PrivateKey *rsa.PrivateKey  `json:"-"`
-	PublicKey  *rsa.PublicKey   `json:"-"`
-	PrivatePEM string           `json:"private_pem"`
-	PublicPEM  string           `json:"public_pem"`
-	CreatedAt  time.Time        `json:"created_at"`
-	ExpiresAt  time.Time        `json:"expires_at"`
-	Active     bool             `json:"active"`
+	ID         string          `json:"id"`
+	Algorithm  string          `json:"algorithm"`
+	PrivateKey *rsa.PrivateKey `json:"-"`
+	PublicKey  *rsa.PublicKey  `json:"-"`
+	PrivatePEM string          `json:"private_pem"`
+	PublicPEM  string          `json:"public_pem"`
+	CreatedAt  time.Time       `json:"created_at"`
+	ExpiresAt  time.Time       `json:"expires_at"`
+	Active     bool            `json:"active"`
 }
 
 type KeyStore struct {
-	mu        sync.RWMutex
-	keys      map[string]*SigningKey
-	filePath  string
+	mu       sync.RWMutex
+	keys     map[string]*SigningKey
+	filePath string
 }
 
 func NewKeyStore(filePath string) (*KeyStore, error) {
@@ -66,9 +66,9 @@ func (ks *KeyStore) GenerateKey(bitSize int, active bool, expiresIn time.Duratio
 		return "", fmt.Errorf("failed to encode key pair: %w", err)
 	}
 
-	pubKeyBytes, err := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal public key: %w", err)
+	pubKeyBytes, marshalErr := x509.MarshalPKIXPublicKey(&privateKey.PublicKey)
+	if marshalErr != nil {
+		return "", fmt.Errorf("failed to marshal public key: %w", marshalErr)
 	}
 	hash := sha256.Sum256(pubKeyBytes)
 	kid := hex.EncodeToString(hash[:8])
@@ -215,12 +215,12 @@ func (ks *KeyStore) saveToFile() error {
 	}
 
 	tmpFile := ks.filePath + ".tmp"
-	if err := os.WriteFile(tmpFile, data, 0600); err != nil {
-		return fmt.Errorf("failed to write keystore file: %w", err)
+	if writeErr := os.WriteFile(tmpFile, data, 0600); writeErr != nil {
+		return fmt.Errorf("failed to write keystore file: %w", writeErr)
 	}
 
-	if err := os.Rename(tmpFile, ks.filePath); err != nil {
-		return fmt.Errorf("failed to rename keystore file: %w", err)
+	if renameErr := os.Rename(tmpFile, ks.filePath); renameErr != nil {
+		return fmt.Errorf("failed to rename keystore file: %w", renameErr)
 	}
 
 	return nil
@@ -241,9 +241,9 @@ func (ks *KeyStore) loadFromFile() error {
 	}
 
 	for _, key := range payload.Keys {
-		privateKey, publicKey, err := decodeKeyPair(key.PrivatePEM, key.PublicPEM)
-		if err != nil {
-			return fmt.Errorf("failed to decode key pair for kid %s: %w", key.ID, err)
+		privateKey, publicKey, decodeErr := decodeKeyPair(key.PrivatePEM, key.PublicPEM)
+		if decodeErr != nil {
+			return fmt.Errorf("failed to decode key pair for kid %s: %w", key.ID, decodeErr)
 		}
 
 		key.PrivateKey = privateKey

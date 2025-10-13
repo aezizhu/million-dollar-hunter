@@ -51,13 +51,13 @@ func main() {
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "KID\tALGORITHM\tACTIVE\tCREATED\tEXPIRES")
+		_, _ = fmt.Fprintln(w, "KID\tALGORITHM\tACTIVE\tCREATED\tEXPIRES")
 		for _, key := range keys {
 			activeStr := ""
 			if key.Active {
 				activeStr = "✓"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				key.ID,
 				key.Algorithm,
 				activeStr,
@@ -65,7 +65,7 @@ func main() {
 				key.ExpiresAt.Format("2006-01-02"),
 			)
 		}
-		w.Flush()
+		_ = w.Flush()
 
 	case *activateCmd != "":
 		if err := ks.ActivateKey(*activateCmd); err != nil {
