@@ -15,7 +15,7 @@ type Manager struct {
 	accessTTL  time.Duration
 	refreshTTL time.Duration
 
-	mu        sync.RWMutex
+	mu         sync.RWMutex
 	signingKey []byte
 	keys       map[string][]byte
 	currentKID string
