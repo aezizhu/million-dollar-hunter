@@ -28,6 +28,8 @@ type Config struct {
 	OpenAPIPath             string
 	RouteLimitsJSON         string
 	StrictOpenAPIValidation bool
+	EnableHSTS              bool
+	CSPPolicy               string
 }
 
 func getenv(k, d string) string {
@@ -82,5 +84,7 @@ func Load() Config {
 		OpenAPIPath:             getenv("OPENAPI_PATH", "../docs/openapi.yaml"),
 		RouteLimitsJSON:         os.Getenv("ROUTE_LIMITS"),
 		StrictOpenAPIValidation: getenvBool("STRICT_OPENAPI_VALIDATION", false),
+		EnableHSTS:              getenvBool("ENABLE_HSTS", false),
+		CSPPolicy:               getenv("CSP_POLICY", ""),
 	}
 }

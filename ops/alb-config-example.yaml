@@ -1,0 +1,28 @@
+alb:
+  name: api-gateway-alb
+  scheme: internet-facing
+  listeners:
+    - port: 443
+      protocol: HTTPS
+      certificate_arn: arn:aws:acm:region:account:certificate/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+      default_actions:
+        - type: forward
+          target_group_name: api-gateway-tg
+
+target_groups:
+  - name: api-gateway-tg
+    protocol: HTTP
+    port: 8080
+    health_check:
+      path: /healthz
+      interval_seconds: 15
+      timeout_seconds: 5
+      healthy_threshold: 2
+      unhealthy_threshold: 3
+
+notes:
+  - Ensure instances or pods run API Gateway on port 8080 (HTTP).
+  - HTTPS terminates at ALB; app should receive X-Forwarded-Proto=https.
+  - HSTS is emitted by the app only when ENABLE_HSTS=true.
+  - Do not inject/override Access-Control-* headers at the ALB; allow the app to manage CORS.
+  - For Kubernetes, consider AWS Load Balancer Controller with Ingress annotations to forward X-Forwarded-* headers properly.
