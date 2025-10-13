@@ -81,8 +81,9 @@ func TestAudienceArrayAndString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign err: %v", err)
 	}
-	if _, err := m.ValidateToken(s1, "aud"); err != nil {
-		t.Fatalf("unexpected error for aud array: %v", err)
+	_, vErr := m.ValidateToken(s1, "aud")
+	if vErr != nil {
+		t.Fatalf("unexpected error for aud array: %v", vErr)
 	}
 
 	c2 := jwt.MapClaims{
@@ -103,8 +104,9 @@ func TestAudienceArrayAndString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign err: %v", err)
 	}
-	if _, err := m.ValidateToken(s2, "aud"); err != nil {
-		t.Fatalf("unexpected error for aud string: %v", err)
+	_, vErr2 := m.ValidateToken(s2, "aud")
+	if vErr2 != nil {
+		t.Fatalf("unexpected error for aud string: %v", vErr2)
 	}
 }
 
