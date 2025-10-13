@@ -1,10 +1,142 @@
 package jwtmgr
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
+
+func TestExpiredToken(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Subject:   "u",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now.Add(-2 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(-1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now.Add(-2 * time.Minute)),
+			ID:        "exp",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	s, err := tok.SignedString([]byte("key"))
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected expiration error")
+	}
+}
+
+func TestIssuerMismatch(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "bad-issuer",
+			Subject:   "u",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+			ID:        "iss",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	s, err := tok.SignedString([]byte("key"))
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected issuer mismatch error")
+	}
+}
+
+func TestAudienceArrayAndString(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	now := time.Now().UTC()
+	claimsArr := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Subject:   "u",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+			ID:        "aud1",
+		},
+	}
+	tok1 := jwt.NewWithClaims(jwt.SigningMethodHS256, claimsArr)
+	s1, err := tok1.SignedString([]byte("key"))
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	_, vErr := m.ValidateToken(s1, "aud")
+	if vErr != nil {
+		t.Fatalf("unexpected error for aud array: %v", vErr)
+	}
+
+	c2 := jwt.MapClaims{
+		"iss":   "issuer",
+		"sub":   "u",
+		"aud":   "aud",
+		"iat":   now.Unix(),
+		"exp":   now.Add(1 * time.Minute).Unix(),
+		"nbf":   now.Unix(),
+		"jti":   "aud2",
+		"uid":   "u",
+		"email": "e@x.com",
+	}
+	var s2 string
+
+	tok2 := jwt.NewWithClaims(jwt.SigningMethodHS256, c2)
+	s2, err = tok2.SignedString([]byte("key"))
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	_, vErr2 := m.ValidateToken(s2, "aud")
+	if vErr2 != nil {
+		t.Fatalf("unexpected error for aud string: %v", vErr2)
+	}
+}
+
+func TestIssuedAtInFuture(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Subject:   "u",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now.Add(2 * time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(3 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			ID:        "iatf",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	s, err := tok.SignedString([]byte("key"))
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected iat-in-future error")
+	}
+}
 
 func TestGenerateAndValidateToken(t *testing.T) {
 	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
@@ -66,4 +198,111 @@ func TestMalformedToken(t *testing.T) {
 	}
 	parts := strings.Split("a.b.", ".")
 	_ = parts
+}
+func TestMissingSubClaim(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+			ID:        "nosub",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	s, err := tok.SignedString([]byte("key"))
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected error due to missing sub")
+	}
+}
+func TestNotBeforeInFuture(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Subject:   "u",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			ID:        "1",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	s, err := tok.SignedString([]byte("key"))
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected not-before error")
+	}
+}
+
+func TestNoneAlgorithmAttackRejected(t *testing.T) {
+	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Subject:   "u",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+			ID:        "2",
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodNone, claims)
+	s, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
+	if err != nil {
+		t.Fatalf("sign none err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected validation to reject alg none")
+	}
+}
+func TestInvalidKIDRejected(t *testing.T) {
+	ks, err := NewKeyStore("")
+	if err != nil {
+		t.Fatalf("keystore init err: %v", err)
+	}
+	m := NewWithKeyStore("issuer", "aud", time.Minute, time.Hour, ks)
+
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Subject:   "u",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+			ID:        "kid-miss",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tok.Header["kid"] = "unknown"
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	s, err := tok.SignedString(priv)
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected error due to invalid kid")
+	}
 }
