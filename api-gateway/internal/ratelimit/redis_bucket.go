@@ -8,11 +8,11 @@ import (
 )
 
 type RedisTokenBucket struct {
-	rdb     *redis.Client
-	rate    int
-	burst   int
-	period  time.Duration
-	prefix  string
+	rdb    *redis.Client
+	rate   int
+	burst  int
+	period time.Duration
+	prefix string
 }
 
 type AllowState struct {

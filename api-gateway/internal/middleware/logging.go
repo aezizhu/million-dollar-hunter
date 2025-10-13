@@ -13,7 +13,7 @@ func Logging(logger zerolog.Logger) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		raw := c.Request.URL.RawQuery
 
-	traceIDVal, _ := c.Get("request_id")
+		traceIDVal, _ := c.Get("request_id")
 		traceID := ""
 		if tid, ok := traceIDVal.(string); ok {
 			traceID = tid
