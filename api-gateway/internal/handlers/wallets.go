@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
-	pb "github.com/aezizhu/million-dollar-hunter/services/portfolio-service/proto/portfolio/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
