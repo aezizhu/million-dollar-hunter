@@ -1,9 +1,15 @@
 package middleware
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
+
+func init() {
+	os.Setenv("ENABLE_PII_SCRUBBING", "true")
+	piiScrubbingEnabled = true
+}
 
 func TestScrubEmail(t *testing.T) {
 	tests := []struct {
