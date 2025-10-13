@@ -18,11 +18,11 @@ type Config struct {
 	JWTSigningKey   []byte
 	EnableMultiUser bool
 
-	JWTKeyStoreFile string
-	JWTGraceHours   int
-	JWTDisableLegacy bool
-	JWTRotateAdminToken string
-	JWKSCacheTTLSeconds int
+	JWTKeyStoreFile        string
+	JWTGraceHours          int
+	JWTDisableLegacy       bool
+	JWTRotateAdminToken    string
+	JWKSCacheTTLSeconds    int
 	JWKSRotationTTLSeconds int
 }
 

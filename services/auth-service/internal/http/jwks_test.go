@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/keystore"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
+	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/keystore"
 )
 
 func TestJWKS_OK(t *testing.T) {

@@ -19,9 +19,8 @@ import (
 	grpcserver "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/grpc"
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
-	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/keystore"
-
+	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
 func main() {

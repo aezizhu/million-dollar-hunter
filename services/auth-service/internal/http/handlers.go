@@ -27,8 +27,7 @@ type Server struct {
 	Store         store.UserStore
 	RefreshTokens store.RefreshStore
 	Audit         store.AuditStore
-	KS interface{}
-
+	KS            interface{}
 }
 
 type LoginRequest struct {

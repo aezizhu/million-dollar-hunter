@@ -11,8 +11,8 @@ import (
 type Status string
 
 const (
-	StatusActive Status = "active"
-	StatusGrace Status = "grace"
+	StatusActive  Status = "active"
+	StatusGrace   Status = "grace"
 	StatusRetired Status = "retired"
 )
 
@@ -26,12 +26,12 @@ type PublicKey struct {
 }
 
 type KeyRecord struct {
-	Kid       string    `json:"kid"`
-	CreatedAt time.Time `json:"created_at"`
-	Status    Status    `json:"status"`
-	NotAfter  time.Time `json:"not_after"`
-	PrivatePEM string   `json:"private_pem"`
-	PublicPEM  string   `json:"public_pem"`
+	Kid        string    `json:"kid"`
+	CreatedAt  time.Time `json:"created_at"`
+	Status     Status    `json:"status"`
+	NotAfter   time.Time `json:"not_after"`
+	PrivatePEM string    `json:"private_pem"`
+	PublicPEM  string    `json:"public_pem"`
 }
 
 type KeyStore interface {

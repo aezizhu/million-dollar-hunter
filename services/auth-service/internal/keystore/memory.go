@@ -11,10 +11,10 @@ import (
 )
 
 type MemoryStore struct {
-	mu          sync.RWMutex
-	keys        []KeyRecord
-	grace       time.Duration
-	activeKID   string
+	mu        sync.RWMutex
+	keys      []KeyRecord
+	grace     time.Duration
+	activeKID string
 }
 
 func NewMemoryStore(grace time.Duration, withInitial bool) (*MemoryStore, error) {

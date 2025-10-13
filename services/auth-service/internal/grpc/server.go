@@ -5,7 +5,6 @@ import (
 	"context"
 	"time"
 
-
 	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 )

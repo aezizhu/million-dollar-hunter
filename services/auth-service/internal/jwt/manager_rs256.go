@@ -11,13 +11,13 @@ import (
 )
 
 type RSManager struct {
-	issuer       string
-	audience     string
-	accessTTL    time.Duration
-	refreshTTL   time.Duration
-	ks           keystore.KeyStore
-	legacyKey    []byte
-	allowLegacy  bool
+	issuer      string
+	audience    string
+	accessTTL   time.Duration
+	refreshTTL  time.Duration
+	ks          keystore.KeyStore
+	legacyKey   []byte
+	allowLegacy bool
 }
 
 func NewWithKeyStore(issuer, audience string, accessTTL, refreshTTL time.Duration, ks keystore.KeyStore, legacyHSKey []byte, allowLegacy bool) *RSManager {
