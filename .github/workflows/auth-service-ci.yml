@@ -185,30 +185,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Install gitleaks
-      run: |
-        curl -sSL https://raw.githubusercontent.com/gitleaks/gitleaks/master/install.sh | bash -s -- -b /usr/local/bin
-        gitleaks version
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --redact --report-format json --report-path gitleaks-report.json
 
-    - name: Run gitleaks
-      run: |
-        gitleaks detect --redact --report-format json --report-path gitleaks-report.json
+      - name: Install truffleHog
+        run: |
+          python3 -m pip install --user truffleHog
 
-    - name: Install truffleHog
-      run: |
-        pipx install truffleHog || python3 -m pip install --user truffleHog
+      - name: Run truffleHog
+        run: |
+          ~/.local/bin/trufflehog filesystem --json . > trufflehog-report.json
 
-    - name: Run truffleHog
-      run: |
-        trufflehog filesystem --json . > trufflehog-report.json
-
-    - name: Upload secret scan reports
-      uses: actions/upload-artifact@v4
-      with:
-        name: secret-scan-reports
-        path: |
-          gitleaks-report.json
-          trufflehog-report.json
+      - name: Upload secret scan reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-reports
+          path: |
+            gitleaks-report.json
+            trufflehog-report.json
