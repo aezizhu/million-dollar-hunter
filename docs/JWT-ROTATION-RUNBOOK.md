@@ -45,6 +45,76 @@ cd /home/ubuntu/repos/million-dollar-hunter/services/auth-service
 
 **Note**: The new key is NOT active yet. This allows testing before activation.
 
+## HS256 to RS256 Migration
+
+The auth-service supports both HS256 (legacy) and RS256 (production) signing modes for backward compatibility.
+
+### Migration Path
+
+**Phase 1: Dual Mode (Current)**
+- Legacy tokens (HS256) continue to validate via `JWT_SIGNING_KEY`
+- New tokens use RS256 when KeyStore is configured
+- Both modes work simultaneously
+
+**Phase 2: RS256 Only (Post-Migration)**
+- Remove `JWT_SIGNING_KEY` environment variable
+- Service will fail fast on startup if no KeyStore configured
+- Only RS256 tokens can be validated
+
+### Disabling HS256 Legacy Mode
+
+To enforce RS256-only mode after full migration:
+
+1. **Remove HS256 Configuration**:
+   ```bash
+   # Remove from environment
+   unset JWT_SIGNING_KEY
+   
+   # Or remove from .env file
+   # JWT_SIGNING_KEY=...  <-- DELETE THIS LINE
+   ```
+
+2. **Verify KeyStore Configuration**:
+   ```bash
+   # Ensure keystore is configured
+   export KEYSTORE_PATH=./config/keystore.json
+   
+   # Generate initial key if needed
+   ./bin/keytool -keystore ./config/keystore.json -generate -bits 2048 -expires 2160h -active
+   ```
+
+3. **Restart Service**:
+   ```bash
+   systemctl restart auth-service
+   ```
+
+4. **Validation**:
+   - Service starts successfully ✓
+   - JWKS endpoint returns keys ✓
+   - Old HS256 tokens rejected ✗
+   - New RS256 tokens accepted ✓
+
+### Migration Timeline Recommendation
+
+- **Week 1-2**: Deploy RS256 support (current implementation)
+  - Both HS256 and RS256 work
+  - Monitor token validation metrics
+  
+- **Week 3-4**: Generate RS256 keys, monitor JWKS
+  - All new tokens use RS256
+  - Old HS256 tokens still validate
+  
+- **Week 5**: Wait for HS256 token expiration
+  - Access tokens: 15 min TTL (expires quickly)
+  - Refresh tokens: 7 day TTL (wait full 7 days)
+  
+- **Week 6+**: Remove HS256 support
+  - Delete JWT_SIGNING_KEY from configuration
+  - Deploy and verify
+  - All tokens now RS256 only
+
+**Note**: The new key is NOT active yet. This allows testing before activation.
+
 #### 2. Verify New Key
 
 ```bash

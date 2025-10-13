@@ -93,6 +93,8 @@ func (m *Manager) GeneratePair(userID, email string) (string, string, time.Time,
 	return access, refresh, exp, nil
 }
 
+// GetKeyStore returns the underlying KeyStore for JWKS endpoint access.
+// Returns nil if running in legacy single-key mode.
 func (m *Manager) GetKeyStore() *KeyStore {
 	return m.keyStore
 }

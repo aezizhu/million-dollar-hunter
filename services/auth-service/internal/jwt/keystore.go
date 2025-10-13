@@ -16,6 +16,8 @@ import (
 	"time"
 )
 
+// SigningKey represents a JWT signing key with metadata for rotation support.
+// It contains both the RSA key pair and PEM-encoded versions for persistence.
 type SigningKey struct {
 	ID         string          `json:"id"`
 	Algorithm  string          `json:"algorithm"`
@@ -28,12 +30,15 @@ type SigningKey struct {
 	Active     bool            `json:"active"`
 }
 
+// KeyStore manages multiple JWT signing keys with rotation support.
+// Keys are stored in memory and optionally persisted to a file.
 type KeyStore struct {
 	mu       sync.RWMutex
 	keys     map[string]*SigningKey
 	filePath string
 }
 
+// NewKeyStore creates a new KeyStore and loads existing keys from the file if it exists.
 func NewKeyStore(filePath string) (*KeyStore, error) {
 	ks := &KeyStore{
 		keys:     make(map[string]*SigningKey),
@@ -41,6 +46,13 @@ func NewKeyStore(filePath string) (*KeyStore, error) {
 	}
 
 	if filePath != "" {
+		if fileInfo, err := os.Stat(filePath); err == nil {
+			mode := fileInfo.Mode().Perm()
+			if mode&0077 != 0 {
+				return nil, fmt.Errorf("keystore file has insecure permissions %o (should be 0600)", mode)
+			}
+		}
+
 		if err := ks.loadFromFile(); err != nil {
 			if !os.IsNotExist(err) {
 				return nil, fmt.Errorf("failed to load keystore: %w", err)
@@ -51,6 +63,8 @@ func NewKeyStore(filePath string) (*KeyStore, error) {
 	return ks, nil
 }
 
+// GenerateKey creates a new RSA signing key and adds it to the keystore.
+// Returns the generated key ID (kid).
 func (ks *KeyStore) GenerateKey(bitSize int, active bool, expiresIn time.Duration) (string, error) {
 	if bitSize < 2048 {
 		return "", errors.New("key size must be at least 2048 bits")
@@ -99,6 +113,7 @@ func (ks *KeyStore) GenerateKey(bitSize int, active bool, expiresIn time.Duratio
 	return kid, nil
 }
 
+// GetActiveKey returns the currently active signing key for new token generation.
 func (ks *KeyStore) GetActiveKey() (*SigningKey, error) {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
@@ -113,6 +128,8 @@ func (ks *KeyStore) GetActiveKey() (*SigningKey, error) {
 	return nil, errors.New("no active signing key found")
 }
 
+// GetKey retrieves a specific signing key by ID for token validation.
+// Keys can be retrieved within the 24-hour grace period after expiration.
 func (ks *KeyStore) GetKey(kid string) (*SigningKey, error) {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
@@ -131,6 +148,7 @@ func (ks *KeyStore) GetKey(kid string) (*SigningKey, error) {
 	return key, nil
 }
 
+// ActivateKey marks the specified key as active and deactivates all others.
 func (ks *KeyStore) ActivateKey(kid string) error {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()
@@ -155,6 +173,7 @@ func (ks *KeyStore) ActivateKey(kid string) error {
 	return nil
 }
 
+// ListKeys returns all non-expired keys including those in the grace period.
 func (ks *KeyStore) ListKeys() []*SigningKey {
 	ks.mu.RLock()
 	defer ks.mu.RUnlock()
@@ -172,6 +191,8 @@ func (ks *KeyStore) ListKeys() []*SigningKey {
 	return keys
 }
 
+// CleanupExpiredKeys removes keys that are past the 7-day cleanup period.
+// Returns the number of keys removed.
 func (ks *KeyStore) CleanupExpiredKeys() (int, error) {
 	ks.mu.Lock()
 	defer ks.mu.Unlock()

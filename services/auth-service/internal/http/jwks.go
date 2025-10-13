@@ -9,10 +9,12 @@ import (
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 )
 
+// JWKSResponse represents the JSON Web Key Set response format per RFC 7517.
 type JWKSResponse struct {
 	Keys []JWK `json:"keys"`
 }
 
+// JWK represents a single JSON Web Key with RSA public key components.
 type JWK struct {
 	Kty string `json:"kty"`
 	Use string `json:"use"`
@@ -20,10 +22,6 @@ type JWK struct {
 	Alg string `json:"alg"`
 	N   string `json:"n,omitempty"`
 	E   string `json:"e,omitempty"`
-}
-
-type KeyStoreProvider interface {
-	ListKeys() []*jwtmgr.SigningKey
 }
 
 func (s *Server) JWKS(w http.ResponseWriter, r *http.Request) {
