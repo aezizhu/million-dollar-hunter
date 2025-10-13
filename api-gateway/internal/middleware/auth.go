@@ -70,27 +70,65 @@ func loadLocalJWTKeys(ctx context.Context, sec sharedsecrets.Client) localJWTKey
 	return lk
 }
 
-func localValidate(tokenStr string, aud string, lk localJWTKeys, envSecret string) (string, error) {
+func localValidate(tokenStr string, aud string, lk localJWTKeys, envSecret string, issuer string) (string, error) {
+	leeway := time.Second * 60
+
+	checkStandard := func(cl *jwt.RegisteredClaims) error {
+		now := time.Now()
+		if cl.ExpiresAt != nil && now.After(cl.ExpiresAt.Time.Add(leeway)) {
+			return fmt.Errorf("expired")
+		}
+		if cl.NotBefore != nil && now.Before(cl.NotBefore.Time.Add(-leeway)) {
+			return fmt.Errorf("not_before")
+		}
+		if cl.IssuedAt != nil && now.Before(cl.IssuedAt.Time.Add(-leeway)) {
+			return fmt.Errorf("issued_at_in_future")
+		}
+		if issuer != "" && cl.Issuer != issuer {
+			return fmt.Errorf("iss_mismatch")
+		}
+		if aud != "" {
+			if len(cl.Audience) == 0 {
+				return fmt.Errorf("aud_missing")
+			}
+			found := false
+			for _, a := range cl.Audience {
+				if a == aud {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("aud_mismatch")
+			}
+		}
+		return nil
+	}
+
 	if envSecret != "" {
-		tok, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		var rc jwt.RegisteredClaims
+		parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+		tok, err := parser.ParseWithClaims(tokenStr, &rc, func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
 			return []byte(envSecret), nil
 		})
 		if err != nil || !tok.Valid {
-			return "", fmt.Errorf("env jwt invalid")
+			return "", fmt.Errorf("invalid")
 		}
-		if claims, ok := tok.Claims.(jwt.MapClaims); ok {
-			if sub, ok := claims["sub"].(string); ok && sub != "" {
-				return sub, nil
-			}
+		if err := checkStandard(&rc); err != nil {
+			return "", err
 		}
-		return "", fmt.Errorf("missing sub")
+		if rc.Subject == "" {
+			return "", fmt.Errorf("sub_missing")
+		}
+		return rc.Subject, nil
 	}
 
+	var rc jwt.RegisteredClaims
 	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
-	tok, err := parser.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+	tok, err := parser.ParseWithClaims(tokenStr, &rc, func(t *jwt.Token) (interface{}, error) {
 		if kid, ok := t.Header["kid"].(string); ok && kid != "" {
 			if k, ok := lk.keys[kid]; ok {
 				return k, nil
@@ -101,38 +139,18 @@ func localValidate(tokenStr string, aud string, lk localJWTKeys, envSecret strin
 				return k, nil
 			}
 		}
-		return nil, fmt.Errorf("no key")
+		return nil, fmt.Errorf("no_key")
 	})
 	if err != nil || !tok.Valid {
-		return "", fmt.Errorf("invalid token")
+		return "", fmt.Errorf("invalid")
 	}
-	if claims, ok := tok.Claims.(jwt.MapClaims); ok {
-		if a, ok := claims["aud"]; ok {
-			switch v := a.(type) {
-			case string:
-				if aud != "" && v != aud {
-					return "", fmt.Errorf("aud mismatch")
-				}
-			case []any:
-				if aud != "" {
-					found := false
-					for _, x := range v {
-						if s, ok := x.(string); ok && s == aud {
-							found = true
-							break
-						}
-					}
-					if !found {
-						return "", fmt.Errorf("aud missing")
-					}
-				}
-			}
-		}
-		if sub, ok := claims["sub"].(string); ok && sub != "" {
-			return sub, nil
-		}
+	if err := checkStandard(&rc); err != nil {
+		return "", err
 	}
-	return "", fmt.Errorf("missing sub")
+	if rc.Subject == "" {
+		return "", fmt.Errorf("sub_missing")
+	}
+	return rc.Subject, nil
 }
 
 func Auth(cfg config.Config, authConn *grpc.ClientConn) gin.HandlerFunc {
@@ -210,9 +228,25 @@ func Auth(cfg config.Config, authConn *grpc.ClientConn) gin.HandlerFunc {
 			return
 		}
 
-		uid, err := localValidate(tokenStr, cfg.JWTAudience, lk, cfg.JWTSecret)
+		uid, err := localValidate(tokenStr, cfg.JWTAudience, lk, cfg.JWTSecret, cfg.JWTIssuer)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+			reason := err.Error()
+			switch reason {
+			case "expired":
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token_expired"})
+			case "not_before":
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token_not_yet_valid"})
+			case "issued_at_in_future":
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token_issued_at_in_future"})
+			case "iss_mismatch":
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "issuer_mismatch"})
+			case "aud_missing", "aud_mismatch":
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "audience_invalid"})
+			case "sub_missing":
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "subject_missing"})
+			default:
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid_token"})
+			}
 			return
 		}
 		c.Set("user_id", uid)

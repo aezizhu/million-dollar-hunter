@@ -20,6 +20,7 @@ type Config struct {
 	AuthGRPCFallbackToLocal bool
 	JWTSecret               string
 	JWTAudience             string
+	JWTIssuer               string
 	FrontendURL             string
 	OTLPEndpoint            string
 	PrometheusNamespace     string
@@ -71,9 +72,10 @@ func Load() Config {
 		AuthValidateMode:        getenv("AUTH_VALIDATE_MODE", "grpc"),
 		AuthGRPCAddr:            os.Getenv("AUTH_GRPC_ADDR"),
 		AuthGRPCTimeoutMs:       getenvInt("AUTH_GRPC_TIMEOUT_MS", 2000),
-		AuthGRPCFallbackToLocal: getenvBool("AUTH_GRPC_FALLBACK_TO_LOCAL", true),
+		AuthGRPCFallbackToLocal: getenvBool("AUTH_GRPC_FALLBACK_TO_LOCAL", false),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		JWTAudience:             os.Getenv("JWT_AUDIENCE"),
+		JWTIssuer:               os.Getenv("JWT_ISSUER"),
 		FrontendURL:             getenv("FRONTEND_URL", "*"),
 		OTLPEndpoint:            os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
 		PrometheusNamespace:     getenv("PROMETHEUS_NAMESPACE", "api_gateway"),
