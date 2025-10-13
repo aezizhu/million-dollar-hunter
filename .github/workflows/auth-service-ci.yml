@@ -202,7 +202,7 @@ jobs:
 
       - name: Run gitleaks
         run: |
-          gitleaks detect --redact --report-format json --report-path gitleaks-report.json --config-path .gitleaks.toml || exit 1
+          gitleaks detect --redact --report-format json --report-path gitleaks-report.json -c .gitleaks.toml || exit 1
           if [ -s gitleaks-report.json ]; then
             cat gitleaks-report.json | jq 'length as $n | "Findings: \($n)"' || true
           fi
