@@ -361,7 +361,7 @@ func TestConcurrentRefreshRequests(t *testing.T) {
 	for i := 0; i < concurrency; i++ {
 		go func() {
 			defer wg.Done()
-			if err := s.RevokeRefreshToken(ctx, refreshToken); err == nil {
+			if revokeErr := s.RevokeRefreshToken(ctx, refreshToken); revokeErr == nil {
 				atomic.AddInt32(&success, 1)
 			}
 		}()
@@ -500,7 +500,6 @@ func TestLockoutPerUserIsolation(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, lockedB, "user B should not be locked")
 }
-
 
 func setupDatabase(t *testing.T, ctx context.Context) (testcontainers.Container, *pgxpool.Pool) {
 	pgContainer, err := postgres.Run(ctx,
