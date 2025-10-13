@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,38 +9,42 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/ratelimit"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
 )
 
-type stubLimiter struct {
-	allowed    bool
-	limit      int
-	remaining  int
-	reset      time.Time
-	retryAfter time.Duration
+type simpleStub struct {
+	ok        bool
+	limit     int
+	remaining int
+	reset     time.Time
+	retry     time.Duration
 }
 
-func (s stubLimiter) Allow(key string) (bool, int, int, time.Time, time.Duration) {
-	return s.allowed, s.limit, s.remaining, s.reset, s.retryAfter
+func (s simpleStub) Allow(_ context.Context, _ string) (bool, int, int, time.Time, time.Duration) {
+	return s.ok, s.limit, s.remaining, s.reset, s.retry
 }
 
-func testEngine(l Limiter) *gin.Engine {
+func newHierStub(ipOK, userOK, routeOK bool, lim, rem int, retry time.Duration) *ratelimit.HierarchicalLimiter {
+	now := time.Now().Add(1 * time.Second)
+	ip := simpleStub{ok: ipOK, limit: lim, remaining: rem, reset: now, retry: retry}
+	user := simpleStub{ok: userOK, limit: lim, remaining: rem, reset: now, retry: retry}
+	route := simpleStub{ok: routeOK, limit: lim, remaining: rem, reset: now, retry: retry}
+	return ratelimit.NewHierarchicalLimiter(ip, user, route, "")
+}
+
+func testEngineHier(h *ratelimit.HierarchicalLimiter, cfg config.Config) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(RateLimit(l))
+	r.Use(RateLimitHier(h, cfg))
 	r.GET("/ping", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 	return r
 }
 
-func TestRateLimitAllowed(t *testing.T) {
-	lim := stubLimiter{
-		allowed:    true,
-		limit:      10,
-		remaining:  9,
-		reset:      time.Now().Add(1 * time.Second),
-		retryAfter: 0,
-	}
-	r := testEngine(lim)
+func TestRateLimitHier_Allowed(t *testing.T) {
+	h := newHierStub(true, true, true, 10, 9, 0)
+	r := testEngineHier(h, config.Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
 	w := httptest.NewRecorder()
@@ -62,15 +67,9 @@ func TestRateLimitAllowed(t *testing.T) {
 	}
 }
 
-func TestRateLimitBlocked(t *testing.T) {
-	lim := stubLimiter{
-		allowed:    false,
-		limit:      10,
-		remaining:  0,
-		reset:      time.Now().Add(500 * time.Millisecond),
-		retryAfter: 500 * time.Millisecond,
-	}
-	r := testEngine(lim)
+func TestRateLimitHier_Blocked(t *testing.T) {
+	h := newHierStub(true, true, false, 10, 0, 500*time.Millisecond)
+	r := testEngineHier(h, config.Config{})
 
 	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
 	w := httptest.NewRecorder()
