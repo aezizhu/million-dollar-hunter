@@ -53,10 +53,10 @@ func maskIP(ip string) string {
 }
 
 func scrubString(s string) string {
-	if !piiScrubbingEnabled || s == "" || len(s) > maxScanLength {
+	if s == "" || len(s) > maxScanLength {
 		return s
 	}
-	
+
 	out := s
 	out = passKeysRe.ReplaceAllStringFunc(out, func(match string) string {
 		eqIdx := strings.Index(match, "=")
@@ -69,8 +69,7 @@ func scrubString(s string) string {
 	out = emailRe.ReplaceAllString(out, "user@***")
 	out = walletRe.ReplaceAllString(out, "[redacted_wallet]")
 	out = uuidRe.ReplaceAllString(out, "[redacted_id]")
-	
-	// Mask IPs using net.ParseIP - scan character by character
+
 	var result strings.Builder
 	result.Grow(len(out))
 	i := 0
@@ -92,7 +91,7 @@ func scrubString(s string) string {
 		result.WriteByte(out[i])
 		i++
 	}
-	
+
 	return result.String()
 }
 
