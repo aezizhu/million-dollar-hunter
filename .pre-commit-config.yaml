@@ -1,9 +1,9 @@
 repos:
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.4
+    rev: v8.24.3
     hooks:
       - id: gitleaks
-        args: [ "--redact" ]
+        args: ["--redact", "-c", ".gitleaks.toml"]
   - repo: local
     hooks:
       - id: trufflehog

@@ -200,13 +200,21 @@ jobs:
           sudo chmod +x /usr/local/bin/gitleaks
           gitleaks version
 
-      - name: Run gitleaks
+      - name: Run gitleaks (JSON)
         run: |
-          gitleaks detect --redact --report-format json --report-path gitleaks-report.json -c .gitleaks.toml || exit 1
+          gitleaks detect --redact --report-format json --report-path gitleaks-report.json -c .gitleaks.toml
           if [ -s gitleaks-report.json ]; then
             cat gitleaks-report.json | jq 'length as $n | "Findings: \($n)"' || true
           fi
 
+      - name: Run gitleaks (SARIF)
+        run: |
+          gitleaks detect --redact --report-format sarif --report-path gitleaks-report.sarif -c .gitleaks.toml
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: gitleaks-report.sarif
 
       - name: Install truffleHog
         run: |
@@ -217,6 +225,25 @@ jobs:
           ~/.local/bin/trufflehog filesystem --json . > trufflehog-report.json || true
           if [ -s trufflehog-report.json ]; then echo "truffleHog report saved."; fi
 
+      - name: Sanitize truffleHog output
+        if: always()
+        run: |
+          if [ -s trufflehog-report.json ]; then
+            jq 'del(.[]?.raw)' trufflehog-report.json > trufflehog-report.redacted.json || cp trufflehog-report.json trufflehog-report.redacted.json
+          else
+            echo "[]" > trufflehog-report.redacted.json
+          fi
+
+      - name: Evaluate truffleHog severity (optional strict)
+        if: always()
+        env:
+          TRUFFLEHOG_STRICT: ${{ vars.TRUFFLEHOG_STRICT || 'false' }}
+        run: |
+          COUNT=$(jq '[.[] | select(.found == true)] | length' trufflehog-report.redacted.json 2>/dev/null || echo 0)
+          echo "truffleHog findings: $COUNT"
+          if [ "${TRUFFLEHOG_STRICT}" = "true" ] && [ "$COUNT" -gt 0 ]; then
+            echo "Strict mode enabled and findings present"; exit 1; fi
+
       - name: Upload secret scan reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -224,4 +251,6 @@ jobs:
           name: secret-scan-reports
           path: |
             gitleaks-report.json
+            gitleaks-report.sarif
             trufflehog-report.json
+            trufflehog-report.redacted.json

@@ -1,18 +1,1 @@
-# Allowlist for known false positives only. Keep entries narrow and documented.
-
-# Test files with dummy/test secrets
-**/*_test.go
-
-# Documentation and examples
-docs/**/*
-**/*.md
-**/.env.example
-
-# Monitoring configs (Grafana/Prometheus) – may contain query expressions and sample tokens, not real secrets
-monitoring/grafana/auth-slo-dashboard.json
-monitoring/prometheus/alerting-rules.yaml
-monitoring/prometheus/recording-rules.yaml
-
-# CI/workflow files and build artifacts
-.github/workflows/**
-**/keytool
+# Centralized allowlisting is managed in .gitleaks.toml; this file intentionally left minimal. # (important-comment)

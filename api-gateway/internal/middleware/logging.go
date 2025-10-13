@@ -16,6 +16,7 @@ var (
 	jwtRe      = regexp.MustCompile(`\beyJ[a-zA-Z0-9_\-]+?\.[a-zA-Z0-9_\-]+?\.[a-zA-Z0-9_\-]+?\b`)
 	passKeysRe = regexp.MustCompile(`(?i)(password|pass|pwd|secret|token|authorization|api_key|api-key)=([^&\s]+)`)
 	ipv4Re     = regexp.MustCompile(`\b(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}\b`)
+	ipv6Re     = regexp.MustCompile(`\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}\b`)
 )
 
 func maskIP(ip string) string {
@@ -23,6 +24,16 @@ func maskIP(ip string) string {
 		return ip
 	}
 	return ipv4Re.ReplaceAllString(ip, `$1.xxx`)
+}
+
+func scrubIPv6(s string) string {
+	return ipv6Re.ReplaceAllStringFunc(s, func(m string) string {
+		i := strings.LastIndex(m, ":")
+		if i == -1 {
+			return m
+		}
+		return m[:i+1] + "xxxx"
+	})
 }
 
 func scrubString(s string) string {
@@ -36,6 +47,7 @@ func scrubString(s string) string {
 	out = walletRe.ReplaceAllString(out, "[redacted_wallet]")
 	out = uuidRe.ReplaceAllString(out, "[redacted_id]")
 	out = ipv4Re.ReplaceAllString(out, `$1.xxx`)
+	out = scrubIPv6(out)
 	return out
 }
 
