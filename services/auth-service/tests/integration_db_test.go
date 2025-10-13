@@ -3,6 +3,8 @@ package tests
 import (
 	"context"
 	"database/sql"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -323,6 +325,182 @@ func TestConcurrentTokenGeneration(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, concurrency, tokenCount, "All refresh tokens should be stored")
 }
+func TestConcurrentRefreshRequests(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx := context.Background()
+
+	pgContainer, pool := setupDatabase(t, ctx)
+	defer testcontainers.TerminateContainer(pgContainer)
+	defer pool.Close()
+
+	s := store.New(pool)
+	jwtManager := jwtmgr.New("test-issuer", "test-audience", 15*time.Minute, 168*time.Hour, []byte("test-secret-key"))
+
+	var userID string
+	email := "refresh-race@example.com"
+	passwordHash, _ := bcrypt.GenerateFromPassword([]byte("SomePass123!"), bcrypt.DefaultCost)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO users (email, password_hash, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		RETURNING id
+	`, email, string(passwordHash)).Scan(&userID)
+	require.NoError(t, err)
+
+	_, refreshToken, expiresAt, err := jwtManager.GeneratePair(userID, email)
+	require.NoError(t, err)
+	err = s.StoreRefreshToken(ctx, userID, refreshToken, expiresAt)
+	require.NoError(t, err)
+
+	concurrency := 10
+	var success int32
+	wg := sync.WaitGroup{}
+	wg.Add(concurrency)
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			defer wg.Done()
+			if err := s.RevokeRefreshToken(ctx, refreshToken); err == nil {
+				atomic.AddInt32(&success, 1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	assert.Equal(t, int32(1), success, "only one concurrent refresh should succeed")
+
+	var revokedAt sql.NullTime
+	err = pool.QueryRow(ctx, `
+		SELECT revoked_at FROM refresh_tokens WHERE token = $1
+	`, refreshToken).Scan(&revokedAt)
+	require.NoError(t, err)
+	assert.True(t, revokedAt.Valid, "refresh token should be revoked")
+}
+
+func TestLockoutBoundaryConditions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx := context.Background()
+	pgContainer, pool := setupDatabase(t, ctx)
+	defer testcontainers.TerminateContainer(pgContainer)
+	defer pool.Close()
+
+	s := store.New(pool)
+
+	var userID string
+	email := "lock-boundary@example.com"
+	pw, _ := bcrypt.GenerateFromPassword([]byte("Password1!"), bcrypt.DefaultCost)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO users (email, password_hash, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		RETURNING id
+	`, email, string(pw)).Scan(&userID)
+	require.NoError(t, err)
+
+	for i := 0; i < 2; i++ {
+		require.NoError(t, s.RecordLoginAttempt(ctx, userID, "login_failed", "127.0.0.1", "test-agent"))
+	}
+	locked, err := s.IsUserLockedOut(ctx, userID, 3, 15*time.Minute)
+	require.NoError(t, err)
+	assert.False(t, locked, "N-1 failures should not lock")
+
+	require.NoError(t, s.RecordLoginAttempt(ctx, userID, "login_failed", "127.0.0.1", "test-agent"))
+	locked, err = s.IsUserLockedOut(ctx, userID, 3, 15*time.Minute)
+	require.NoError(t, err)
+	assert.True(t, locked, "N failures should lock")
+
+	require.NoError(t, s.RecordLoginAttempt(ctx, userID, "login_failed", "127.0.0.1", "test-agent"))
+	locked, err = s.IsUserLockedOut(ctx, userID, 3, 15*time.Minute)
+	require.NoError(t, err)
+	assert.True(t, locked, "N+1 failures remain locked")
+}
+
+func TestLockoutWindowExpiration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx := context.Background()
+	pgContainer, pool := setupDatabase(t, ctx)
+	defer testcontainers.TerminateContainer(pgContainer)
+	defer pool.Close()
+
+	s := store.New(pool)
+
+	var userID string
+	email := "lock-window@example.com"
+	pw, _ := bcrypt.GenerateFromPassword([]byte("Password1!"), bcrypt.DefaultCost)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO users (email, password_hash, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		RETURNING id
+	`, email, string(pw)).Scan(&userID)
+	require.NoError(t, err)
+
+	for i := 0; i < 3; i++ {
+		require.NoError(t, s.RecordLoginAttempt(ctx, userID, "login_failed", "127.0.0.1", "test-agent"))
+	}
+	locked, err := s.IsUserLockedOut(ctx, userID, 3, 15*time.Minute)
+	require.NoError(t, err)
+	assert.True(t, locked, "should be locked after N failures")
+
+	_, err = pool.Exec(ctx, `
+		UPDATE auth_audit
+		SET timestamp = NOW() - INTERVAL '16 minutes'
+		WHERE user_id = $1 AND event_type = 'login_failed'
+	`, userID)
+	require.NoError(t, err)
+
+	locked, err = s.IsUserLockedOut(ctx, userID, 3, 15*time.Minute)
+	require.NoError(t, err)
+	assert.False(t, locked, "lockout should expire after window")
+}
+
+func TestLockoutPerUserIsolation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	ctx := context.Background()
+	pgContainer, pool := setupDatabase(t, ctx)
+	defer testcontainers.TerminateContainer(pgContainer)
+	defer pool.Close()
+
+	s := store.New(pool)
+
+	var userA, userB string
+	pw, _ := bcrypt.GenerateFromPassword([]byte("Password1!"), bcrypt.DefaultCost)
+
+	err := pool.QueryRow(ctx, `
+		INSERT INTO users (email, password_hash, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		RETURNING id
+	`, "userA@example.com", string(pw)).Scan(&userA)
+	require.NoError(t, err)
+
+	err = pool.QueryRow(ctx, `
+		INSERT INTO users (email, password_hash, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		RETURNING id
+	`, "userB@example.com", string(pw)).Scan(&userB)
+	require.NoError(t, err)
+
+	for i := 0; i < 3; i++ {
+		require.NoError(t, s.RecordLoginAttempt(ctx, userA, "login_failed", "127.0.0.1", "test-agent"))
+	}
+
+	lockedA, err := s.IsUserLockedOut(ctx, userA, 3, 15*time.Minute)
+	require.NoError(t, err)
+	assert.True(t, lockedA, "user A should be locked")
+
+	lockedB, err := s.IsUserLockedOut(ctx, userB, 3, 15*time.Minute)
+	require.NoError(t, err)
+	assert.False(t, lockedB, "user B should not be locked")
+}
+
 
 func setupDatabase(t *testing.T, ctx context.Context) (testcontainers.Container, *pgxpool.Pool) {
 	pgContainer, err := postgres.Run(ctx,

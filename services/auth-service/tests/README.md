@@ -113,6 +113,12 @@ GOWORK=off go test -v ./tests -short
 - Database race condition handling
 - Token storage integrity
 
+### TestConcurrentRefreshRequests
+Purpose: Validate revoke-on-use behavior under concurrent refresh attempts; only one succeeds, others fail appropriately.
+Duration: ~2s
+
+---
+
 **Duration**: ~2s
 
 ---
@@ -136,6 +142,18 @@ Migrations are run automatically before each test using the `runMigrations()` he
 
 - `setupDatabase(t, ctx)`: Creates PostgreSQL container and runs migrations
 - `runMigrations(ctx, pool)`: Executes all database migrations
+
+### TestLockoutBoundaryConditions
+Purpose: Validate lockout threshold edge cases (N=3 lock; N-1 no lock; N+1 stays locked).
+Duration: ~2s
+
+### TestLockoutWindowExpiration
+Purpose: Verify lockout expires after 15-minute window.
+Duration: ~2s
+
+### TestLockoutPerUserIsolation
+Purpose: Ensure lockout applies per-user and does not affect other users.
+Duration: ~2s
 
 ## Troubleshooting
 

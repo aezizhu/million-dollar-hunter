@@ -245,3 +245,60 @@ func TestLoginMultiUserSuccess_PersistRefresh(t *testing.T) {
 		t.Fatalf("expected refresh token persisted")
 	}
 }
+func TestLogin_SQLInjectionEmail(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "false")
+	os.Setenv("MVP_USERNAME", "aezi")
+	os.Setenv("MVP_PASSWORD", "Aa@123456789")
+	s := &Server{JWT: &fakeJWT{}}
+	body, _ := json.Marshal(LoginRequest{Username: "' OR 1=1; --", Password: "anything"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code != http.StatusUnauthorized && w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400/401, got %d", w.Code)
+	}
+}
+
+func TestLogin_XSSPayload(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "false")
+	os.Setenv("MVP_USERNAME", "aezi")
+	os.Setenv("MVP_PASSWORD", "Aa@123456789")
+	s := &Server{JWT: &fakeJWT{}}
+	body, _ := json.Marshal(LoginRequest{Username: "<script>alert(1)</script>", Password: "x"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	req.Header.Set("User-Agent", "<script>alert(1)</script>")
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code == http.StatusInternalServerError {
+		t.Fatalf("unexpected 500 for XSS payload")
+	}
+}
+
+func TestLogin_HeaderInjection(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "false")
+	os.Setenv("MVP_USERNAME", "aezi")
+	os.Setenv("MVP_PASSWORD", "Aa@123456789")
+	s := &Server{JWT: &fakeJWT{}}
+	body, _ := json.Marshal(LoginRequest{Username: "aezi", Password: "bad"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+	req.Header.Set("X-Forwarded-For", "127.0.0.1\r\nX-Bad: evil")
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code == http.StatusInternalServerError {
+		t.Fatalf("unexpected 500 for header injection")
+	}
+}
+
+func TestLogin_ParameterPollution(t *testing.T) {
+	os.Setenv("ENABLE_MULTI_USER", "false")
+	os.Setenv("MVP_USERNAME", "aezi")
+	os.Setenv("MVP_PASSWORD", "Aa@123456789")
+	s := &Server{JWT: &fakeJWT{}}
+	dup := []byte(`{"username":"aezi","username":"other","password":"Aa@123456789"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(dup))
+	w := httptest.NewRecorder()
+	s.Login(w, req)
+	if w.Code == http.StatusInternalServerError {
+		t.Fatalf("unexpected 500 for duplicate parameter")
+	}
+}
