@@ -16,31 +16,57 @@ This document outlines the security hardening measures implemented across the Mi
 
 ### JWT Token Management
 
-**Implementation**: `services/auth-service/internal/jwt/manager.go`
+**Implementation**: `services/auth-service/internal/jwt/manager.go`, `keystore.go`
 
 **Security Measures**:
-- **Algorithm**: HS256 (HMAC with SHA-256) for token signing
-- **Key Management**: JWT signing keys loaded from environment variables only, never committed to code
+- **Algorithm**: RS256 (RSA asymmetric signing) with HS256 legacy support
+- **Key Management**: 
+  - Multi-key support with Key ID (kid) in JWT header
+  - File-backed keystore with private key encryption
+  - Automated key rotation with zero downtime
+  - 24-hour grace period for validation
+  - 7-day cleanup period for expired keys
 - **Token Expiration**: 
   - Access tokens: 15 minutes (configurable via `ACCESS_TTL`)
   - Refresh tokens: 7 days (configurable via `REFRESH_TTL`)
-- **Claims Validation**: All tokens include issuer (`iss`), audience (`aud`), subject (`sub`), and expiration (`exp`) claims
+- **Claims Validation**: All tokens include issuer (`iss`), audience (`aud`), subject (`sub`), expiration (`exp`), and JWT ID (`jti`)
 - **Audience Verification**: API Gateway validates expected audience to prevent token reuse across services
+- **JWKS Endpoint**: `/.well-known/jwks.json` serves public keys for RS256 validation
 
 **Configuration**:
 ```bash
-JWT_SIGNING_KEY=<strong-secret-key>  # REQUIRED - Must be at least 32 characters
+# Legacy mode (HS256)
+JWT_SIGNING_KEY=<strong-secret-key>  # REQUIRED for legacy mode
+
+# Production mode (RS256 with keystore)
+KEYSTORE_PATH=./config/keystore.json
 JWT_ISSUER=auth-service
 JWT_AUDIENCE=api-gateway
 ACCESS_TTL=15m
 REFRESH_TTL=168h
 ```
 
-**Hardening Recommendations**:
-- [ ] Rotate JWT signing keys every 90 days
-- [ ] Implement RS256 (asymmetric) for production (allows public key distribution to services)
-- [ ] Add `jti` (JWT ID) claim for token revocation tracking
-- [ ] Implement token blacklist/revocation list with Redis
+**Key Rotation**:
+```bash
+# Generate new 2048-bit key (90-day expiry)
+./bin/keytool -keystore ./config/keystore.json -generate -bits 2048 -expires 2160h
+
+# Activate new key
+./bin/keytool -keystore ./config/keystore.json -activate <kid>
+
+# Clean up expired keys
+./bin/keytool -keystore ./config/keystore.json -cleanup
+```
+
+**Operational Runbook**: See `/docs/JWT-ROTATION-RUNBOOK.md` for detailed procedures
+
+**Status**:
+- [x] RS256 asymmetric signing implemented
+- [x] Multi-key support with kid header
+- [x] JWKS endpoint for public key distribution
+- [x] Key rotation tooling (keytool CLI)
+- [x] Operational runbooks documented
+- [x] Backward compatibility with HS256
 
 ### Password Policy
 

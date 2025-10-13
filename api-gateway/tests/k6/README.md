@@ -1,3 +1,26 @@
+# Auth k6 Load Tests
+
+Prereqs:
+- Install k6
+
+Env:
+- BASE_URL: base API URL, e.g. http://localhost:8080
+- AUTH_EMAIL, AUTH_PASSWORD: credentials for login flow
+
+Run:
+- k6 run api-gateway/tests/k6/auth-load-test.js
+
+What it does:
+- Exercises POST /api/v1/auth/login and /api/v1/auth/refresh
+- Reports p50, p95, p99 latencies
+- Checks X-RateLimit-* headers
+- Tracks error rate and rate-limited rate
+
+Thresholds:
+- Login p99 < 500ms
+- Refresh p99 < 500ms
+- Error rate < 2%
+- Rate limited < 20%
 # k6 Load Tests for API Gateway
 
 This directory contains k6 load testing scenarios for the Million Hunter API Gateway.
