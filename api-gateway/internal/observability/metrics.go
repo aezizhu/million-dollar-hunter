@@ -1,10 +1,25 @@
 package observability
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+func HashUserID(userID string) string {
+	if userID == "" {
+		return ""
+	}
+	salt := os.Getenv("METRICS_USER_HASH_SALT")
+	h := sha256.New()
+	h.Write([]byte(salt))
+	h.Write([]byte(":"))
+	h.Write([]byte(userID))
+	return hex.EncodeToString(h.Sum(nil))
+}
 
 type HTTPMetrics struct {
 	RequestsTotal    *prometheus.CounterVec

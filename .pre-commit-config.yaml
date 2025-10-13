@@ -1,0 +1,18 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+        args: [ "--redact" ]
+  - repo: local
+    hooks:
+      - id: trufflehog
+        name: trufflehog
+        entry: bash -c 'trufflehog filesystem --json . | jq -e ".found" && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace

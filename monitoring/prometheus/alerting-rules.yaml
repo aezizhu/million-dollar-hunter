@@ -1,0 +1,24 @@
+groups:
+  - name: auth-error-budget
+    interval: 5m
+    rules:
+      - alert: AuthErrorBudgetLow
+        expr: auth:error_budget_remaining_30d < 0.10
+        for: 15m
+        labels:
+          severity: critical
+          service: auth
+        annotations:
+          summary: "Auth error budget below 10% remaining"
+          description: "30-day rolling error budget remaining is below threshold."
+  - name: auth-derived
+    interval: 5m
+    rules:
+      - record: auth:requests_total_30d
+        expr: sum_over_time(auth_grpc_validation_total[30d])
+      - record: auth:errors_total_30d
+        expr: sum_over_time((auth_grpc_validation_total{outcome="error"})[30d])
+      - record: auth:error_rate_30d
+        expr: auth:errors_total_30d / ignoring(outcome) auth:requests_total_30d
+      - record: auth:error_budget_remaining_30d
+        expr: (0.001 - on() auth:error_rate_30d) / 0.001

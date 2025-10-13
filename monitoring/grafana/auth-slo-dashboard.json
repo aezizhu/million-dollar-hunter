@@ -1,0 +1,64 @@
+{
+  "title": "Auth SLO Dashboard",
+  "timezone": "browser",
+  "panels": [
+    {
+      "type": "graph",
+      "title": "Login Latency p99 (SLO < 500ms)",
+      "targets": [
+        { "expr": "gateway:login_p99 * 1000" }
+      ],
+      "yaxes": [
+        { "format": "ms", "min": 0 },
+        { "format": "short" }
+      ],
+      "thresholds": [
+        { "op": "gt", "value": 500, "fill": true, "line": true, "colorMode": "critical" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Token Validation Latency p99 (SLO < 100ms)",
+      "targets": [
+        { "expr": "auth:validation_p99 * 1000" }
+      ],
+      "yaxes": [
+        { "format": "ms", "min": 0 },
+        { "format": "short" }
+      ],
+      "thresholds": [
+        { "op": "gt", "value": 100, "fill": true, "line": true, "colorMode": "critical" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Auth Error Rate (SLO < 0.1%)",
+      "targets": [
+        { "expr": "auth:validation_error_rate * 100" }
+      ],
+      "yaxes": [
+        { "format": "percent", "min": 0, "max": 100 },
+        { "format": "short" }
+      ],
+      "thresholds": [
+        { "op": "gt", "value": 0.1, "fill": true, "line": true, "colorMode": "critical" }
+      ]
+    },
+    {
+      "type": "graph",
+      "title": "Error Budget Remaining (30d)",
+      "targets": [
+        { "expr": "auth:error_budget_remaining_30d * 100" }
+      ],
+      "yaxes": [
+        { "format": "percent", "min": 0, "max": 100 },
+        { "format": "short" }
+      ],
+      "thresholds": [
+        { "op": "lt", "value": 10, "fill": true, "line": true, "colorMode": "critical" }
+      ]
+    }
+  ],
+  "schemaVersion": 27,
+  "version": 1
+}
