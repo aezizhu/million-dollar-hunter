@@ -6,11 +6,11 @@ import (
 )
 
 type LocalTokenBucket struct {
-	mu        sync.Mutex
-	rate      int
-	burst     int
-	interval  time.Duration
-	state     map[string]*bucket
+	mu       sync.Mutex
+	rate     int
+	burst    int
+	interval time.Duration
+	state    map[string]*bucket
 }
 
 type bucket struct {
