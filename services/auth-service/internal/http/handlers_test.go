@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -269,8 +270,15 @@ func TestLogin_XSSPayload(t *testing.T) {
 	req.Header.Set("User-Agent", "<script>alert(1)</script>")
 	w := httptest.NewRecorder()
 	s.Login(w, req)
-	if w.Code == http.StatusInternalServerError {
-		t.Fatalf("unexpected 500 for XSS payload")
+	ct := w.Header().Get("Content-Type")
+	if !strings.Contains(ct, "application/json") {
+		t.Fatalf("expected json content type, got %q", ct)
+	}
+	if w.Code != http.StatusUnauthorized && w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400/401, got %d", w.Code)
+	}
+	if strings.Contains(w.Body.String(), "<script>") {
+		t.Fatalf("response reflected potentially unsafe content")
 	}
 }
 
@@ -284,6 +292,9 @@ func TestLogin_HeaderInjection(t *testing.T) {
 	req.Header.Set("X-Forwarded-For", "127.0.0.1\r\nX-Bad: evil")
 	w := httptest.NewRecorder()
 	s.Login(w, req)
+	if w.Header().Get("X-Bad") != "" {
+		t.Fatalf("unexpected injected header in response")
+	}
 	if w.Code == http.StatusInternalServerError {
 		t.Fatalf("unexpected 500 for header injection")
 	}
@@ -298,7 +309,7 @@ func TestLogin_ParameterPollution(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(dup))
 	w := httptest.NewRecorder()
 	s.Login(w, req)
-	if w.Code == http.StatusInternalServerError {
-		t.Fatalf("unexpected 500 for duplicate parameter")
+	if !(w.Code == http.StatusUnauthorized || w.Code == http.StatusBadRequest) {
+		t.Fatalf("expected 400/401 for duplicate parameter payload, got %d", w.Code)
 	}
 }

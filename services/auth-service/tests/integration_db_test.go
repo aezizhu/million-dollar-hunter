@@ -453,6 +453,7 @@ func TestLockoutWindowExpiration(t *testing.T) {
 		WHERE user_id = $1 AND event_type = 'login_failed'
 	`, userID)
 	require.NoError(t, err)
+	time.Sleep(10 * time.Millisecond)
 
 	locked, err = s.IsUserLockedOut(ctx, userID, 3, 15*time.Minute)
 	require.NoError(t, err)

@@ -36,12 +36,16 @@ export function setup() {
   return null;
 }
 
+function hasRateLimitHeaders(h) {
+  return h['X-RateLimit-Limit'] !== undefined || h['RateLimit-Limit'] !== undefined;
+}
+
 export default function () {
   const creds = JSON.stringify({ email: AUTH_EMAIL, password: AUTH_PASSWORD });
   let res = http.post(`${BASE_URL}/api/v1/auth/login`, creds, { headers: { 'Content-Type': 'application/json' }, tags: { endpoint: 'auth_login' } });
   const okLogin = check(res, {
     'login status 200': (r) => r.status === 200,
-    'rate limit headers present': (r) => r.headers['X-RateLimit-Limit'] !== undefined,
+    'rate limit headers present': (r) => hasRateLimitHeaders(r.headers),
   });
   if (!okLogin) errorRate.add(1);
   if (res.status === 429) rateLimited.add(1);
@@ -58,7 +62,7 @@ export default function () {
     res = http.post(`${BASE_URL}/api/v1/auth/refresh`, payload, { headers: { 'Content-Type': 'application/json' }, tags: { endpoint: 'auth_refresh' } });
     const okRefresh = check(res, {
       'refresh status ok/allowed': (r) => r.status === 200 || r.status === 501 || r.status === 429,
-      'rate limit headers present': (r) => r.headers['X-RateLimit-Limit'] !== undefined,
+      'rate limit headers present': (r) => hasRateLimitHeaders(r.headers),
     });
     if (!okRefresh) errorRate.add(1);
     if (res.status === 429) rateLimited.add(1);
