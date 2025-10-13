@@ -227,5 +227,9 @@ func (m *Manager) ValidateToken(tokenStr string, expectedAud string) (*Claims, e
 		}
 	}
 
+	if claims.Subject == "" {
+		return nil, errors.New("missing subject")
+	}
+
 	return claims, nil
 }
