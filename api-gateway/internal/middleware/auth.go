@@ -18,7 +18,7 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/observability"
 	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
-	sharedsecrets "github.com/aezizhu/million-dollar-hunter/api-gateway/internal/secrets"
+	secrets "github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 )
 
 type jwtSecret struct {
@@ -32,27 +32,27 @@ type localJWTKeys struct {
 	rsKeys     map[string]*rsa.PublicKey
 }
 
-func getSecretsClient() sharedsecrets.Client {
+func getSecretsClient() secrets.Client {
 	switch strings.ToLower(os.Getenv("SECRETS_PROVIDER")) {
 	case "aws":
 		region := os.Getenv("AWS_REGION")
-		cli, err := sharedsecrets.NewAWS(context.Background(), sharedsecrets.AWSConfig{
-			Config: sharedsecrets.Config{
+		cli, err := secrets.NewAWS(context.Background(), secrets.AWSConfig{
+			Config: secrets.Config{
 				CacheTTL:        time.Hour,
 				RefreshInterval: time.Minute,
 			},
 			Region: region,
 		})
 		if err != nil {
-			return sharedsecrets.NewEnv(sharedsecrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
+			return secrets.NewEnv(secrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
 		}
 		return cli
 	default:
-		return sharedsecrets.NewEnv(sharedsecrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
+		return secrets.NewEnv(secrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
 	}
 }
 
-func loadLocalJWTKeys(ctx context.Context, sec sharedsecrets.Client) localJWTKeys {
+func loadLocalJWTKeys(ctx context.Context, sec secrets.Client) localJWTKeys {
 	prefix := os.Getenv("SECRETS_PREFIX")
 	if prefix == "" {
 		env := os.Getenv("ENV")

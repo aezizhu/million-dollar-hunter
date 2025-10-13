@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/aezizhu/million-dollar-hunter/services/market-data-service/internal/secrets"
+	"github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 )
 
 type Config struct {

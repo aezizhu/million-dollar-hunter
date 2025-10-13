@@ -21,6 +21,9 @@ func (c *EnvClient) Get(ctx context.Context, name string) (string, error) {
 	}
 	v := os.Getenv(name)
 	if v == "" {
+		v = os.Getenv(ToEnvKey(name))
+	}
+	if v == "" {
 		return "", ErrNotFound
 	}
 	c.base.setCached(name, v)

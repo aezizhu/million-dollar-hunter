@@ -37,3 +37,7 @@ require (
 	golang.org/x/text v0.27.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 )
+
+require github.com/aezizhu/million-dollar-hunter/pkg/secrets v0.0.0-00010101000000-000000000000
+
+replace github.com/aezizhu/million-dollar-hunter/pkg/secrets => ../../pkg/secrets

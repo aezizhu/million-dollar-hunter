@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/aezizhu/million-dollar-hunter/ingestion-service/internal/secrets"
+	"github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 )
 
 type Config struct {

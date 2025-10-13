@@ -20,7 +20,7 @@ import (
 	grpcserver "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/grpc"
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
-	authsecrets "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/secrets"
+	secrets "github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
@@ -69,12 +69,12 @@ func main() {
 		log.Info().Msg("Running in multi-user mode")
 	}
 
-	var secClient authsecrets.Client
+	var secClient secrets.Client
 	switch strings.ToLower(os.Getenv("SECRETS_PROVIDER")) {
 	case "aws":
 		region := os.Getenv("AWS_REGION")
-		awsClient, awsErr := authsecrets.NewAWS(context.Background(), authsecrets.AWSConfig{
-			Config: authsecrets.Config{
+		awsClient, awsErr := secrets.NewAWS(context.Background(), secrets.AWSConfig{
+			Config: secrets.Config{
 				CacheTTL:        time.Hour,
 				RefreshInterval: time.Minute,
 			},
@@ -82,12 +82,12 @@ func main() {
 		})
 		if awsErr != nil {
 			log.Error().Err(awsErr).Msg("failed to init AWS secrets client, falling back to env")
-			secClient = authsecrets.NewEnv(authsecrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
+			secClient = secrets.NewEnv(secrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
 		} else {
 			secClient = awsClient
 		}
 	default:
-		secClient = authsecrets.NewEnv(authsecrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
+		secClient = secrets.NewEnv(secrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
 	}
 	if secClient != nil {
 		secClient.StartBackgroundRefresh(context.Background())
