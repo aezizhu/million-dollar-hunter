@@ -83,6 +83,7 @@ func main() {
 	mux.HandleFunc("/api/v1/auth/register", s.Register)
 	mux.HandleFunc("/api/v1/auth/logout", s.Logout)
 	mux.HandleFunc("/api/v1/auth/refresh", s.Refresh)
+	mux.HandleFunc("/.well-known/jwks.json", s.JWKS)
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
