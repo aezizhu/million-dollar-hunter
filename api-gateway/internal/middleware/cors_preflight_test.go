@@ -3,6 +3,56 @@ package middleware_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"testing"
+
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/server"
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
+)
+
+func TestCORS_WithCredentials_NoWildcardOrigin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	cfg := config.Load()
+	allowed := "http://allowed.example"
+	cfg.FrontendURL = allowed
+	reg := prometheus.NewRegistry()
+	logger := zerolog.Nop()
+	server.Register(r, cfg, logger, reg)
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("Origin", allowed)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	ao := w.Header().Get("Access-Control-Allow-Origin")
+	if ao != allowed {
+		t.Fatalf("expected exact origin %q, got %q", allowed, ao)
+	}
+	if ao == "*" {
+		t.Fatalf("must not use wildcard origin when credentials are allowed")
+	}
+
+	pre := httptest.NewRequest(http.MethodOptions, "/api/v1/portfolios", nil)
+	pre.Header.Set("Origin", allowed)
+	pre.Header.Set("Access-Control-Request-Method", "GET")
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, pre)
+	ao2 := w2.Header().Get("Access-Control-Allow-Origin")
+	if ao2 != allowed {
+		t.Fatalf("expected exact origin %q on preflight, got %q", allowed, ao2)
+	}
+	if ao2 == "*" {
+		t.Fatalf("must not use wildcard origin on preflight when credentials are allowed")
+	}
+}
+
+package middleware_test
+
+import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
