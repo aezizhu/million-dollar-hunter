@@ -189,6 +189,7 @@ jobs:
       pull-requests: read
       actions: read
       security-events: write
+      # NOTE: SARIF upload requires Code Scanning enabled (confirmed 2025-10-13). (important-comment)
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
