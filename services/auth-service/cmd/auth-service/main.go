@@ -20,6 +20,8 @@ import (
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
+	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/keystore"
+
 )
 
 func main() {
@@ -62,10 +64,17 @@ func main() {
 		log.Info().Msg("Running in multi-user mode")
 	}
 
-	j := jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
+	var jwtInterface interface {
+		GeneratePair(userID, email string) (string, string, time.Time, error)
+		ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, error)
+	}
+	grace := time.Duration(cfg.JWTGraceHours) * time.Hour
+	memKS, _ := keystore.NewMemoryStore(grace, true)
+	jrs := jwtmgr.NewWithKeyStore(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, memKS, cfg.JWTSigningKey, !cfg.JWTDisableLegacy)
+	jwtInterface = jrs
 
 	mux := http.NewServeMux()
-	s := &httpapi.Server{Logger: &log, JWT: j}
+	s := &httpapi.Server{Logger: &log, JWT: jwtInterface}
 	if multiUser {
 		dsn := os.Getenv("DATABASE_URL")
 		pool, poolErr := pgxpool.New(context.Background(), dsn)
@@ -78,6 +87,9 @@ func main() {
 		s.Audit = pg
 		defer pool.Close()
 	}
+	mux.HandleFunc("/.well-known/jwks.json", s.JWKS)
+	mux.HandleFunc("/api/v1/auth/keys/rotate", s.RotateKeys)
+
 	mux.HandleFunc("/healthz", s.Health)
 	mux.HandleFunc("/api/v1/auth/login", s.Login)
 	mux.HandleFunc("/api/v1/auth/register", s.Register)
@@ -91,7 +103,7 @@ func main() {
 	}
 
 	grpcSrv := grpc.NewServer()
-	gen.RegisterAuthServiceServer(grpcSrv, grpcserver.New(j))
+	gen.RegisterAuthServiceServer(grpcSrv, grpcserver.New(jwtInterface))
 
 	grpcLn, err := net.Listen("tcp", ":"+cfg.GRPCPort)
 	if err != nil {

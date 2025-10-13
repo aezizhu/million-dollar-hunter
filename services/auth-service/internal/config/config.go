@@ -17,6 +17,13 @@ type Config struct {
 	RefreshTTL      time.Duration
 	JWTSigningKey   []byte
 	EnableMultiUser bool
+
+	JWTKeyStoreFile string
+	JWTGraceHours   int
+	JWTDisableLegacy bool
+	JWTRotateAdminToken string
+	JWKSCacheTTLSeconds int
+	JWKSRotationTTLSeconds int
 }
 
 func getenv(k, def string) string {
@@ -49,5 +56,28 @@ func Parse() (Config, error) {
 	cfg.AccessTTL = time.Duration(attlMin) * time.Minute
 	cfg.RefreshTTL = time.Duration(rttlH) * time.Hour
 	cfg.EnableMultiUser = getenv("ENABLE_MULTI_USER", "false") == "true"
+
+	cfg.JWTKeyStoreFile = getenv("JWT_KEYSTORE_FILE", "")
+	if v := getenv("JWT_GRACE_HOURS", "24"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.JWTGraceHours = n
+		} else {
+			cfg.JWTGraceHours = 24
+		}
+	} else {
+		cfg.JWTGraceHours = 24
+	}
+	cfg.JWTDisableLegacy = getenv("JWT_DISABLE_LEGACY", "false") == "true"
+	cfg.JWTRotateAdminToken = getenv("JWT_ROTATE_ADMIN_TOKEN", "")
+	if v := getenv("JWKS_CACHE_TTL_SECONDS", "300"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.JWKSCacheTTLSeconds = n
+		}
+	}
+	if v := getenv("JWKS_ROTATION_TTL_SECONDS", "60"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			cfg.JWKSRotationTTLSeconds = n
+		}
+	}
 	return cfg, nil
 }
