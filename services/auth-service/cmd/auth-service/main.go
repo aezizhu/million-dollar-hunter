@@ -94,9 +94,11 @@ func main() {
 		defer pool.Close()
 		
 		auditRetention := 90 * 24 * time.Hour
-		if retStr := os.Getenv("AUDIT_RETENTION_DAYS"); retStr != "" {
-			if days, parseErr := time.ParseDuration(retStr + "d"); parseErr == nil {
-				auditRetention = days
+		if retStr := os.Getenv("AUDIT_RETENTION_HOURS"); retStr != "" {
+			if duration, parseErr := time.ParseDuration(retStr); parseErr == nil {
+				auditRetention = duration
+			} else {
+				log.Warn().Err(parseErr).Str("value", retStr).Msg("Invalid AUDIT_RETENTION_HOURS, using default 90 days")
 			}
 		}
 		go func() {

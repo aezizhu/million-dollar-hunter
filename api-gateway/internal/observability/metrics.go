@@ -15,7 +15,7 @@ func HashUserID(userID string) string {
 	}
 	salt := os.Getenv("AUTH_METRICS_SALT")
 	if salt == "" {
-		panic("AUTH_METRICS_SALT environment variable is required but not set - cannot hash user IDs without salt")
+		return "[hash_salt_not_configured]"
 	}
 	h := sha256.New()
 	h.Write([]byte(salt))

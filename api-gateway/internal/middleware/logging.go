@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -12,6 +13,10 @@ import (
 
 const (
 	maxScanLength = 1024 * 1024
+)
+
+var (
+	piiScrubbingEnabled = os.Getenv("ENABLE_PII_SCRUBBING") == "true"
 )
 
 var (
@@ -48,7 +53,7 @@ func maskIP(ip string) string {
 }
 
 func scrubString(s string) string {
-	if s == "" || len(s) > maxScanLength {
+	if !piiScrubbingEnabled || s == "" || len(s) > maxScanLength {
 		return s
 	}
 	
