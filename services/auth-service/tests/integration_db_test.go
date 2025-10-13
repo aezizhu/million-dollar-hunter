@@ -1,8 +1,12 @@
 package tests
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,6 +20,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 	"golang.org/x/crypto/bcrypt"
 
+	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
@@ -500,6 +505,88 @@ func TestLockoutPerUserIsolation(t *testing.T) {
 	lockedB, err := s.IsUserLockedOut(ctx, userB, 3, 15*time.Minute)
 	require.NoError(t, err)
 	assert.False(t, lockedB, "user B should not be locked")
+}
+
+func TestConcurrentRefreshRequestsHTTP(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+	ctx := context.Background()
+	pgContainer, pool := setupDatabase(t, ctx)
+	defer testcontainers.TerminateContainer(pgContainer)
+	defer pool.Close()
+
+	m := jwtmgr.New("mdh-auth", "mdh-api", 1*time.Minute, 5*time.Minute, []byte("test-secret"))
+	s := httpapi.Server{
+		JWT:           m,
+		RefreshTokens: store.New(pool),
+		Audit:         store.New(pool),
+	}
+
+	var userID string
+	email := "concurrent-refresh@example.com"
+	pw, _ := bcrypt.GenerateFromPassword([]byte("Password1!"), bcrypt.DefaultCost)
+	err := pool.QueryRow(ctx, `
+		INSERT INTO users (email, password_hash, created_at, updated_at)
+		VALUES ($1, $2, NOW(), NOW())
+		RETURNING id
+	`, email, string(pw)).Scan(&userID)
+	require.NoError(t, err)
+
+	_, refresh, _, err := m.GeneratePair(userID, email)
+	require.NoError(t, err)
+	require.NotEmpty(t, refresh)
+
+	_, err = store.New(pool).CreateRefreshToken(ctx, userID, refresh, time.Now().Add(5*time.Minute))
+	require.NoError(t, err)
+
+	body, _ := json.Marshal(httpapi.RefreshRequest{RefreshToken: refresh})
+	makeReq := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", bytes.NewReader(body))
+		w := httptest.NewRecorder()
+		s.Refresh(w, req)
+		return w
+	}
+
+	const N = 8
+	var wg sync.WaitGroup
+	wg.Add(N)
+
+	results := make(chan *httptest.ResponseRecorder, N)
+	for i := 0; i < N; i++ {
+		go func() {
+			defer wg.Done()
+			results <- makeReq()
+		}()
+	}
+	wg.Wait()
+	close(results)
+
+	success := 0
+	var newRefresh string
+	for w := range results {
+		if w.Code == http.StatusOK {
+			success++
+			var resp httpapi.RefreshResponse
+			_ = json.NewDecoder(w.Body).Decode(&resp)
+			if newRefresh == "" {
+				newRefresh = resp.RefreshToken
+			}
+			require.NotEmpty(t, resp.AccessToken)
+			require.NotEmpty(t, resp.RefreshToken)
+		} else {
+			require.True(t, w.Code == http.StatusUnauthorized || w.Code == http.StatusConflict)
+		}
+	}
+	require.Equal(t, 1, success, "only one request should succeed")
+
+	_, err = store.New(pool).GetValidRefreshToken(ctx, refresh, time.Now())
+	require.Error(t, err, "old token should be revoked")
+
+	rt, err := store.New(pool).GetValidRefreshToken(ctx, newRefresh, time.Now())
+	require.NoError(t, err, "new refresh should be persisted and valid")
+	require.Equal(t, userID, rt.UserID)
+
 }
 
 func setupDatabase(t *testing.T, ctx context.Context) (testcontainers.Container, *pgxpool.Pool) {
