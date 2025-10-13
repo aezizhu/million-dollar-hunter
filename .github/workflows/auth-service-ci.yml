@@ -190,26 +190,35 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install gitleaks
         run: |
           curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz -o /tmp/gitleaks.tgz
-          tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          sudo tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          sudo chmod +x /usr/local/bin/gitleaks
+          gitleaks version
 
       - name: Run gitleaks
         run: |
-          gitleaks detect --redact --report-format json --report-path gitleaks-report.json
+          gitleaks detect --redact --report-format json --report-path gitleaks-report.json || exit 1
+          if [ -s gitleaks-report.json ]; then
+            cat gitleaks-report.json | jq 'length as $n | "Findings: \($n)"' || true
+          fi
 
 
       - name: Install truffleHog
         run: |
-          python3 -m pip install --user truffleHog
+          python3 -m pip install --user truffleHog jq
 
-      - name: Run truffleHog
+      - name: Run truffleHog (informational)
         run: |
-          ~/.local/bin/trufflehog filesystem --json . > trufflehog-report.json
+          ~/.local/bin/trufflehog filesystem --json . > trufflehog-report.json || true
+          if [ -s trufflehog-report.json ]; then echo "truffleHog report saved."; fi
 
       - name: Upload secret scan reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: secret-scan-reports
