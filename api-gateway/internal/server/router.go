@@ -23,11 +23,10 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
 )
 
-func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
-	var (
-		base ratelimit.SimpleLimiter
-		rdb  *redis.Client
-	)
+func newHierLimiter(cfg config.Config, logger zerolog.Logger) *ratelimit.HierarchicalLimiter {
+	var rdb *redis.Client
+	var ipLim, userLim, routeBase ratelimit.SimpleLimiter
+
 	if cfg.RedisURL != "" {
 		opts := &redis.Options{Addr: cfg.RedisURL}
 		rdb = redis.NewClient(opts)
@@ -37,17 +36,40 @@ func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
 			logger.Warn().Err(err).Msg("Redis unavailable, falling back to local rate limiter")
 		} else {
 			logger.Info().Msg("Using Redis for distributed rate limiting")
-			base = ratelimit.NewRedisTokenBucket(rdb, cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second, "ratelimit")
 		}
 	}
-	if base == nil {
-		local := ratelimit.NewLocalTokenBucket(cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second)
-		base = ratelimit.LocalAdapter{Inner: local}
+
+	ipRPS := cfg.IPRateLimitRPS
+	if ipRPS == 0 {
+		ipRPS = cfg.RateDefaultRPS
+	}
+	ipBurst := cfg.IPRateLimitBurst
+	if ipBurst == 0 {
+		ipBurst = cfg.RateDefaultBurst
+	}
+	userRPS := cfg.UserRateLimitRPS
+	if userRPS == 0 {
+		userRPS = cfg.RateDefaultRPS
+	}
+	userBurst := cfg.UserRateLimitBurst
+	if userBurst == 0 {
+		userBurst = cfg.RateDefaultBurst
+	}
+
+	if rdb != nil {
+		ipLim = ratelimit.NewRedisTokenBucket(rdb, ipRPS, ipBurst, time.Second, "ratelimit")
+		userLim = ratelimit.NewRedisTokenBucket(rdb, userRPS, userBurst, time.Second, "ratelimit")
+		routeBase = ratelimit.NewRedisTokenBucket(rdb, cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second, "ratelimit")
+	} else {
+		ipLim = ratelimit.LocalAdapter{Inner: ratelimit.NewLocalTokenBucket(ipRPS, ipBurst, time.Second)}
+		userLim = ratelimit.LocalAdapter{Inner: ratelimit.NewLocalTokenBucket(userRPS, userBurst, time.Second)}
+		routeBase = ratelimit.LocalAdapter{Inner: ratelimit.NewLocalTokenBucket(cfg.RateDefaultRPS, cfg.RateDefaultBurst, time.Second)}
 	}
 
 	overrides, _ := ratelimit.ParseRouteLimitsJSON(cfg.RouteLimitsJSON)
-	byKey := map[string]ratelimit.SimpleLimiter{}
+	routeLim := routeBase
 	if len(overrides) > 0 {
+		byKey := map[string]ratelimit.SimpleLimiter{}
 		for route, lim := range overrides {
 			if rdb != nil {
 				byKey[route] = ratelimit.NewRedisTokenBucket(rdb, lim.RPS, lim.Burst, time.Second, "ratelimit")
@@ -55,9 +77,10 @@ func newLimiter(cfg config.Config, logger zerolog.Logger) middleware.Limiter {
 				byKey[route] = ratelimit.LocalAdapter{Inner: ratelimit.NewLocalTokenBucket(lim.RPS, lim.Burst, time.Second)}
 			}
 		}
+		routeLim = ratelimit.NewMultiLimiter(routeBase, byKey)
 	}
-	ml := ratelimit.NewMultiLimiter(base, byKey)
-	return limiterAdapter{ml}
+
+	return ratelimit.NewHierarchicalLimiter(ipLim, userLim, routeLim, cfg.RateLimitAllowlist)
 }
 
 type limiterAdapter struct {
@@ -110,7 +133,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 
 	r.Use(middleware.Logging(logger))
 
-	limiter := newLimiter(cfg, logger)
+	hierLimiter := newHierLimiter(cfg, logger)
 
 	r.GET("/healthz", func(c *gin.Context) {
 		health := gin.H{"ok": true}
@@ -136,7 +159,7 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 
 	api := r.Group("/api/v1")
 	api.Use(middleware.Metrics(httpMetrics))
-	api.Use(middleware.RateLimit(limiter))
+	api.Use(middleware.RateLimitHier(hierLimiter, cfg))
 	api.Use(middleware.Auth(cfg, grpcClients.AuthConn))
 	api.Use(middleware.Tracing())
 

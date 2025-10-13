@@ -7,11 +7,13 @@ import (
 )
 
 type HTTPMetrics struct {
-	RequestsTotal    *prometheus.CounterVec
-	RequestsDuration *prometheus.HistogramVec
-	InFlight         prometheus.Gauge
-	RateLimitAllowed *prometheus.CounterVec
-	RateLimitBlocked *prometheus.CounterVec
+	RequestsTotal           *prometheus.CounterVec
+	RequestsDuration        *prometheus.HistogramVec
+	InFlight                prometheus.Gauge
+	RateLimitAllowed        *prometheus.CounterVec
+	RateLimitBlocked        *prometheus.CounterVec
+	ViolationsByIP          prometheus.Counter
+	HierarchicalDenials     *prometheus.CounterVec
 }
 
 func InitMetricsRegistry(cfg interface{}) *prometheus.Registry {
@@ -41,14 +43,24 @@ func NewHTTPMetrics(reg *prometheus.Registry, namespace string) *HTTPMetrics {
 			Namespace: namespace,
 			Name:      "rate_limit_allowed_total",
 			Help:      "Total number of requests allowed by rate limiter",
-		}, []string{"route"}),
+		}, []string{"route", "dimension"}),
 		RateLimitBlocked: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Namespace: namespace,
 			Name:      "rate_limit_blocked_total",
 			Help:      "Total number of requests blocked by rate limiter",
-		}, []string{"route"}),
+		}, []string{"route", "dimension"}),
+		ViolationsByIP: prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "rate_limit_violations_by_ip",
+			Help:      "Count of IP-based rate limit violations",
+		}),
+		HierarchicalDenials: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: namespace,
+			Name:      "rate_limit_hierarchical_denials_total",
+			Help:      "Total number of hierarchical denials by dimension",
+		}, []string{"route", "dimension"}),
 	}
-	reg.MustRegister(m.RequestsTotal, m.RequestsDuration, m.InFlight, m.RateLimitAllowed, m.RateLimitBlocked)
+	reg.MustRegister(m.RequestsTotal, m.RequestsDuration, m.InFlight, m.RateLimitAllowed, m.RateLimitBlocked, m.ViolationsByIP, m.HierarchicalDenials)
 	return m
 }
 

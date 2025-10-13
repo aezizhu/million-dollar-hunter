@@ -106,7 +106,14 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if n >= threshold {
-			http.Error(w, "too many attempts", http.StatusTooManyRequests)
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Retry-After", strconv.Itoa(int(time.Duration(windowMin)*time.Minute/time.Second)))
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":   "rate_limit",
+				"message": "login attempts exceeded",
+				"details": map[string]interface{}{"reason": "auth_lockout"},
+			})
 			return
 		}
 	}

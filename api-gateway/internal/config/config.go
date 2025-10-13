@@ -28,6 +28,13 @@ type Config struct {
 	OpenAPIPath             string
 	RouteLimitsJSON         string
 	StrictOpenAPIValidation bool
+
+	RateLimitAllowlist    string
+	RateLimitBypassHeader string
+	IPRateLimitRPS        int
+	IPRateLimitBurst      int
+	UserRateLimitRPS      int
+	UserRateLimitBurst    int
 }
 
 func getenv(k, d string) string {
@@ -59,7 +66,7 @@ func getenvBool(k string, d bool) bool {
 }
 
 func Load() Config {
-	return Config{
+		return Config{
 		Port:                    getenv("PORT", "8080"),
 		RedisURL:                getenv("REDIS_URL", "localhost:6379"),
 		AuthMode:                getenv("AUTH_MODE", "mvp-gate"),
@@ -82,5 +89,12 @@ func Load() Config {
 		OpenAPIPath:             getenv("OPENAPI_PATH", "../docs/openapi.yaml"),
 		RouteLimitsJSON:         os.Getenv("ROUTE_LIMITS"),
 		StrictOpenAPIValidation: getenvBool("STRICT_OPENAPI_VALIDATION", false),
+
+		RateLimitAllowlist:    os.Getenv("RATE_LIMIT_ALLOWLIST"),
+		RateLimitBypassHeader: os.Getenv("RATE_LIMIT_BYPASS_HEADER"),
+		IPRateLimitRPS:        getenvInt("IP_RATE_LIMIT_RPS", 0),
+		IPRateLimitBurst:      getenvInt("IP_RATE_LIMIT_BURST", 0),
+		UserRateLimitRPS:      getenvInt("USER_RATE_LIMIT_RPS", 0),
+		UserRateLimitBurst:    getenvInt("USER_RATE_LIMIT_BURST", 0),
 	}
 }
