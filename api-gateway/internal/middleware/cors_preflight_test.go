@@ -3,10 +3,12 @@ package middleware_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/server"
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/pkg/headers"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
