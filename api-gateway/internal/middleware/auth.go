@@ -2,6 +2,9 @@ package middleware
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"net/http"
 	"os"
@@ -25,7 +28,8 @@ type jwtSecret struct {
 
 type localJWTKeys struct {
 	currentKID string
-	keys       map[string][]byte
+	hsKeys     map[string][]byte
+	rsKeys     map[string]*rsa.PublicKey
 }
 
 func getSecretsClient() sharedsecrets.Client {
@@ -57,15 +61,38 @@ func loadLocalJWTKeys(ctx context.Context, sec sharedsecrets.Client) localJWTKey
 		}
 		prefix = "mdh/" + env + "/auth/jwt"
 	}
-	lk := localJWTKeys{keys: map[string][]byte{}}
+	lk := localJWTKeys{
+		hsKeys: make(map[string][]byte),
+		rsKeys: make(map[string]*rsa.PublicKey),
+	}
+	parseAndStore := func(js jwtSecret) {
+		if js.KID == "" || js.Key == "" {
+			return
+		}
+		if blk, _ := pem.Decode([]byte(js.Key)); blk != nil {
+			if pub, err := x509.ParsePKIXPublicKey(blk.Bytes); err == nil {
+				if rp, ok := pub.(*rsa.PublicKey); ok {
+					lk.rsKeys[js.KID] = rp
+					if lk.currentKID == "" {
+						lk.currentKID = js.KID
+					}
+					return
+				}
+			}
+		}
+		lk.hsKeys[js.KID] = []byte(js.Key)
+		if lk.currentKID == "" {
+			lk.currentKID = js.KID
+		}
+	}
+
 	var cur jwtSecret
-	if err := sec.GetJSON(ctx, prefix+"/current", &cur); err == nil && cur.KID != "" && cur.Key != "" {
-		lk.keys[cur.KID] = []byte(cur.Key)
-		lk.currentKID = cur.KID
+	if err := sec.GetJSON(ctx, prefix+"/current", &cur); err == nil {
+		parseAndStore(cur)
 	}
 	var prev jwtSecret
-	if err := sec.GetJSON(ctx, prefix+"/previous", &prev); err == nil && prev.KID != "" && prev.Key != "" {
-		lk.keys[prev.KID] = []byte(prev.Key)
+	if err := sec.GetJSON(ctx, prefix+"/previous", &prev); err == nil {
+		parseAndStore(prev)
 	}
 	return lk
 }
@@ -127,17 +154,37 @@ func localValidate(tokenStr string, aud string, lk localJWTKeys, envSecret strin
 	}
 
 	var rc jwt.RegisteredClaims
-	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	parser := jwt.NewParser(jwt.WithValidMethods([]string{
+		jwt.SigningMethodHS256.Alg(),
+		jwt.SigningMethodRS256.Alg(),
+	}))
 	tok, err := parser.ParseWithClaims(tokenStr, &rc, func(t *jwt.Token) (interface{}, error) {
-		if kid, ok := t.Header["kid"].(string); ok && kid != "" {
-			if k, ok := lk.keys[kid]; ok {
-				return k, nil
+		kid, _ := t.Header["kid"].(string)
+		switch t.Method.Alg() {
+		case jwt.SigningMethodHS256.Alg():
+			if kid != "" {
+				if k, ok := lk.hsKeys[kid]; ok {
+					return k, nil
+				}
 			}
-		}
-		if lk.currentKID != "" {
-			if k, ok := lk.keys[lk.currentKID]; ok {
-				return k, nil
+			if lk.currentKID != "" {
+				if k, ok := lk.hsKeys[lk.currentKID]; ok {
+					return k, nil
+				}
 			}
+		case jwt.SigningMethodRS256.Alg():
+			if kid != "" {
+				if k, ok := lk.rsKeys[kid]; ok {
+					return k, nil
+				}
+			}
+			if lk.currentKID != "" {
+				if k, ok := lk.rsKeys[lk.currentKID]; ok {
+					return k, nil
+				}
+			}
+		default:
+			return nil, jwt.ErrSignatureInvalid
 		}
 		return nil, fmt.Errorf("no_key")
 	})
@@ -202,7 +249,7 @@ func Auth(cfg config.Config, authConn *grpc.ClientConn) gin.HandlerFunc {
 				}
 				if sec != nil {
 					nlk := loadLocalJWTKeys(c.Request.Context(), sec)
-					if len(nlk.keys) > 0 {
+					if len(nlk.hsKeys) > 0 || len(nlk.rsKeys) > 0 {
 						lk = nlk
 					}
 				}
