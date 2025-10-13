@@ -1,6 +1,8 @@
 package jwtmgr
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"strings"
 	"testing"
 	"time"
@@ -270,5 +272,37 @@ func TestNoneAlgorithmAttackRejected(t *testing.T) {
 	}
 	if _, err := m.ValidateToken(s, "aud"); err == nil {
 		t.Fatalf("expected validation to reject alg none")
+	}
+}
+func TestInvalidKIDRejected(t *testing.T) {
+	ks, err := NewKeyStore("")
+	if err != nil {
+		t.Fatalf("keystore init err: %v", err)
+	}
+	m := NewWithKeyStore("issuer", "aud", time.Minute, time.Hour, ks)
+
+	now := time.Now().UTC()
+	claims := Claims{
+		UserID: "u",
+		Email:  "e@x.com",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "issuer",
+			Subject:   "u",
+			Audience:  jwt.ClaimStrings{"aud"},
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(1 * time.Minute)),
+			NotBefore: jwt.NewNumericDate(now),
+			ID:        "kid-miss",
+		},
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tok.Header["kid"] = "unknown"
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	s, err := tok.SignedString(priv)
+	if err != nil {
+		t.Fatalf("sign err: %v", err)
+	}
+	if _, err := m.ValidateToken(s, "aud"); err == nil {
+		t.Fatalf("expected error due to invalid kid")
 	}
 }
