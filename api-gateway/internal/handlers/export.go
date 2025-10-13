@@ -34,7 +34,7 @@ func ExportWallet(portfolioConn *grpc.ClientConn, logger zerolog.Logger) gin.Han
 			Str("address", address).
 			Str("format", format).
 			Msg("Export endpoint not yet fully implemented")
-		
+
 		c.JSON(http.StatusNotImplemented, gin.H{
 			"error":   "not_implemented",
 			"message": "File export and download is not yet available. The backend can generate files but the gateway cannot serve them to clients.",

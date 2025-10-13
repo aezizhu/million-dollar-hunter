@@ -285,6 +285,12 @@ components:
     TooManyRequests:
       description: Rate limit exceeded
       headers:
+        X-RateLimit-Limit:
+          schema: { type: integer }
+        X-RateLimit-Remaining:
+          schema: { type: integer }
+        X-RateLimit-Reset:
+          schema: { type: integer, description: Unix epoch seconds }
         Retry-After:
           schema: { type: integer, description: Seconds until next allowed request }
       content:
