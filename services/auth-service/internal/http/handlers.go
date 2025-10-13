@@ -111,7 +111,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Retry-After", strconv.Itoa(ttlSec))
 			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(threshold))
 			w.Header().Set("X-RateLimit-Remaining", "0")
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(time.Duration(ttlSec)*time.Second).Unix(), 10))
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(time.Duration(ttlSec) * time.Second).Unix(), 10))
 			w.WriteHeader(http.StatusTooManyRequests)
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"error":   "rate_limit",

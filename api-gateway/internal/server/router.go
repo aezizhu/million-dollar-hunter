@@ -83,7 +83,6 @@ func newHierLimiter(cfg config.Config, logger zerolog.Logger) *ratelimit.Hierarc
 	return ratelimit.NewHierarchicalLimiter(ipLim, userLim, routeLim, cfg.RateLimitAllowlist)
 }
 
-
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) *clients.GRPCClients {
 	if cfg.AuthValidateMode == "grpc" {
 		if cfg.AuthGRPCAddr == "" {

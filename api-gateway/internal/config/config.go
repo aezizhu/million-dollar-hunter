@@ -68,7 +68,7 @@ func getenvBool(k string, d bool) bool {
 }
 
 func Load() Config {
-		return Config{
+	return Config{
 		Port:                    getenv("PORT", "8080"),
 		RedisURL:                getenv("REDIS_URL", "localhost:6379"),
 		AuthMode:                getenv("AUTH_MODE", "mvp-gate"),
@@ -99,7 +99,7 @@ func Load() Config {
 		UserRateLimitRPS:      getenvInt("USER_RATE_LIMIT_RPS", 0),
 		UserRateLimitBurst:    getenvInt("USER_RATE_LIMIT_BURST", 0),
 	}
-}
+
 func (c Config) Validate(logger zerolog.Logger) {
 	if c.IPRateLimitRPS < 0 {
 		logger.Warn().Str("env", "IP_RATE_LIMIT_RPS").Msg("negative value; treating as 0 (inherit defaults)")
