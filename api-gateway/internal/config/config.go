@@ -99,6 +99,8 @@ func Load() Config {
 		UserRateLimitRPS:      getenvInt("USER_RATE_LIMIT_RPS", 0),
 		UserRateLimitBurst:    getenvInt("USER_RATE_LIMIT_BURST", 0),
 	}
+}
+
 
 func (c Config) Validate(logger zerolog.Logger) {
 	if c.IPRateLimitRPS < 0 {
