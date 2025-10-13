@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-
-	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/keystore"
 )
 
 type RotateRequest struct {
@@ -42,10 +40,6 @@ func (s *Server) RotateKeys(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Error(w, "server error", http.StatusInternalServerError)
-}
-
-type listPublic interface {
-	ListPublic() []keystore.PublicKey
 }
 
 func JWKSCacheTTL() int {
