@@ -217,3 +217,16 @@ These tests are designed to run in CI environments. The GitHub Actions workflow 
 - [ ] Test distributed scenarios (multiple instances)
 - [ ] Add chaos engineering tests (network failures, database errors)
 - [ ] Test migration rollback scenarios
+## Lockout Tests: Time Source and Window
+- The lockout mechanism counts failures within a sliding 15-minute window. Tests assume DB-side timestamps for audit rows when simulating window expiration, matching observed production behavior.
+- When simulating window expiration in tests, we adjust audit row timestamps to ensure the application logic observes an expired window.
+- Configuration observed in tests:
+  - LOCKOUT_AFTER_FAILS=3
+  - LOCKOUT_WINDOW_MIN=15
+
+## Load Testing Notes
+- See api-gateway/tests/k6/auth-load-test.js for auth-focused load tests (login and refresh), which report p50, p95, p99 latencies and validate rate limiting.
+- Environment variables:
+  - BASE_URL: base API URL (e.g., http://localhost:8080)
+  - AUTH_USER / AUTH_PASS: credentials for login flow
+- Thresholds include latency and error rates; during header schema migration, both X-RateLimit-* and RateLimit-* headers are accepted by checks.
