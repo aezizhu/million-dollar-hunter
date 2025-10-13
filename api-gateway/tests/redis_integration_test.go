@@ -14,6 +14,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/config"
 	mw "github.com/aezizhu/million-dollar-hunter/api-gateway/internal/middleware"
 	rl "github.com/aezizhu/million-dollar-hunter/api-gateway/internal/ratelimit"
 )
@@ -59,13 +60,7 @@ func TestRedisTokenBucket_AllowAndBlock(t *testing.T) {
 	assert.Greater(t, retry, time.Duration(0))
 }
 
-type limiterAdapter struct{ b *rl.RedisTokenBucket }
-
-func (l limiterAdapter) Allow(key string) (bool, int, int, time.Time, time.Duration) {
-	return l.b.Allow(context.Background(), key)
-}
-
-func TestRateLimitMiddleware_WithRedis(t *testing.T) {
+func TestRateLimitHier_WithRedis(t *testing.T) {
 	if testing.Short() {
 		t.Skip("short")
 	}
@@ -74,11 +69,18 @@ func TestRateLimitMiddleware_WithRedis(t *testing.T) {
 	defer c.Terminate(ctx)
 	defer rdb.Close()
 
-	bucket := rl.NewRedisTokenBucket(rdb, 2, 2, 1*time.Second, "it-key")
+	ipBucket := rl.NewRedisTokenBucket(rdb, 2, 2, 1*time.Second, "it-ip")
+	userBucket := rl.NewRedisTokenBucket(rdb, 2, 2, 1*time.Second, "it-user")
+	routeBucket := rl.NewRedisTokenBucket(rdb, 2, 2, 1*time.Second, "it-route")
+	
+	h := rl.NewHierarchicalLimiter(ipBucket, userBucket, routeBucket, "")
+	
 	time.Sleep(50 * time.Millisecond)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(mw.RateLimit(limiterAdapter{bucket}))
+	
+	cfg := config.Config{}
+	r.Use(mw.RateLimitHier(h, cfg))
 	r.GET("/api/v1/auth/login", func(c *gin.Context) { c.JSON(200, gin.H{"ok": true}) })
 
 	for i := 0; i < 3; i++ {
