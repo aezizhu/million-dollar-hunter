@@ -3,17 +3,23 @@ package grpcserver
 
 import (
 	"context"
+	"time"
 
 	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 )
 
-type Server struct {
-	gen.UnimplementedAuthServiceServer
-	JWT *jwtmgr.Manager
+type jwtInterface interface {
+	GeneratePair(userID, email string) (string, string, time.Time, error)
+	ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, error)
 }
 
-func New(jwt *jwtmgr.Manager) *Server {
+type Server struct {
+	gen.UnimplementedAuthServiceServer
+	JWT jwtInterface
+}
+
+func New(jwt jwtInterface) *Server {
 	return &Server{JWT: jwt}
 }
 
