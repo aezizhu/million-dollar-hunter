@@ -85,22 +85,21 @@ func TestAudienceArrayAndString(t *testing.T) {
 		t.Fatalf("unexpected error for aud array: %v", err)
 	}
 
-	type strAudClaims struct {
-		Claims
-	}
 	c2 := jwt.MapClaims{
-		"iss": "issuer",
-		"sub": "u",
-		"aud": "aud",
-		"iat": now.Unix(),
-		"exp": now.Add(1 * time.Minute).Unix(),
-		"nbf": now.Unix(),
-		"jti": "aud2",
-		"uid": "u",
+		"iss":   "issuer",
+		"sub":   "u",
+		"aud":   "aud",
+		"iat":   now.Unix(),
+		"exp":   now.Add(1 * time.Minute).Unix(),
+		"nbf":   now.Unix(),
+		"jti":   "aud2",
+		"uid":   "u",
 		"email": "e@x.com",
 	}
+	var s2 string
+
 	tok2 := jwt.NewWithClaims(jwt.SigningMethodHS256, c2)
-	s2, err := tok2.SignedString([]byte("key"))
+	s2, err = tok2.SignedString([]byte("key"))
 	if err != nil {
 		t.Fatalf("sign err: %v", err)
 	}
@@ -134,7 +133,6 @@ func TestIssuedAtInFuture(t *testing.T) {
 		t.Fatalf("expected iat-in-future error")
 	}
 }
-
 
 func TestGenerateAndValidateToken(t *testing.T) {
 	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
