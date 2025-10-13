@@ -122,29 +122,44 @@ func main() {
 		}
 	}
 
-	var j *jwtmgr.Manager
-	if currentKID != "" && len(keys) > 0 {
-		j = jwtmgr.NewWithKeys(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, keys, currentKID)
-	} else {
-		j = jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
+	var j interface {
+		GeneratePair(userID, email string) (string, string, time.Time, error)
+		ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, error)
 	}
 
-	if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
-		go func() {
-			t := time.NewTicker(1 * time.Minute)
-			defer t.Stop()
-			for range t.C {
-				var cur jwtSecret
-				if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); getErr == nil && cur.KID != "" && cur.Key != "" {
-					nk := map[string][]byte{cur.KID: []byte(cur.Key)}
-					var prev jwtSecret
-					if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); getErr == nil && prev.KID != "" && prev.Key != "" {
-						nk[prev.KID] = []byte(prev.Key)
+	if keystorePath := os.Getenv("KEYSTORE_PATH"); keystorePath != "" {
+		ks, kerr := jwtmgr.NewKeyStore(keystorePath)
+		if kerr != nil {
+			log.Fatal().Err(kerr).Str("path", keystorePath).Msg("failed to load keystore")
+		}
+		j = jwtmgr.NewWithKeyStore(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, ks)
+		log.Info().Str("keystore", keystorePath).Msg("Using RS256 keystore mode")
+	} else {
+		var mgr *jwtmgr.Manager
+		if currentKID != "" && len(keys) > 0 {
+			mgr = jwtmgr.NewWithKeys(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, keys, currentKID)
+		} else {
+			mgr = jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
+		}
+		j = mgr
+
+		if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
+			go func() {
+				t := time.NewTicker(1 * time.Minute)
+				defer t.Stop()
+				for range t.C {
+					var cur jwtSecret
+					if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); getErr == nil && cur.KID != "" && cur.Key != "" {
+						nk := map[string][]byte{cur.KID: []byte(cur.Key)}
+						var prev jwtSecret
+						if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); getErr == nil && prev.KID != "" && prev.Key != "" {
+							nk[prev.KID] = []byte(prev.Key)
+						}
+						mgr.UpdateKeys(nk, cur.KID)
 					}
-					j.UpdateKeys(nk, cur.KID)
 				}
-			}
-		}()
+			}()
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -180,6 +195,7 @@ func main() {
 	mux.HandleFunc("/api/v1/auth/register", s.Register)
 	mux.HandleFunc("/api/v1/auth/logout", s.Logout)
 	mux.HandleFunc("/api/v1/auth/refresh", s.Refresh)
+	mux.HandleFunc("/.well-known/jwks.json", s.JWKS)
 
 	httpSrv := &http.Server{
 		Addr:              ":" + cfg.HTTPPort,
