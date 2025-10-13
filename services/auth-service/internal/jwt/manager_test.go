@@ -1,5 +1,12 @@
 package jwtmgr
 
+import (
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+)
 
 func TestExpiredToken(t *testing.T) {
 	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
@@ -128,13 +135,6 @@ func TestIssuedAtInFuture(t *testing.T) {
 	}
 }
 
-import (
-	"strings"
-	"testing"
-	"time"
-
-	"github.com/golang-jwt/jwt/v5"
-)
 
 func TestGenerateAndValidateToken(t *testing.T) {
 	m := New("issuer", "aud", 1*time.Minute, 1*time.Hour, []byte("key"))
