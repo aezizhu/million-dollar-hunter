@@ -106,7 +106,7 @@ func main() {
 	}
 	if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
 		var cur jwtSecret
-		if err := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); err == nil && cur.KID != "" && cur.Key != "" {
+		if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); getErr == nil && cur.KID != "" && cur.Key != "" {
 			if keys == nil {
 				keys = map[string][]byte{}
 			}
@@ -114,7 +114,7 @@ func main() {
 			currentKID = cur.KID
 		}
 		var prev jwtSecret
-		if err := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); err == nil && prev.KID != "" && prev.Key != "" {
+		if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); getErr == nil && prev.KID != "" && prev.Key != "" {
 			if keys == nil {
 				keys = map[string][]byte{}
 			}
@@ -135,10 +135,10 @@ func main() {
 			defer t.Stop()
 			for range t.C {
 				var cur jwtSecret
-				if err := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); err == nil && cur.KID != "" && cur.Key != "" {
+				if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); getErr == nil && cur.KID != "" && cur.Key != "" {
 					nk := map[string][]byte{cur.KID: []byte(cur.Key)}
 					var prev jwtSecret
-					if err := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); err == nil && prev.KID != "" && prev.Key != "" {
+					if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); getErr == nil && prev.KID != "" && prev.Key != "" {
 						nk[prev.KID] = []byte(prev.Key)
 					}
 					j.UpdateKeys(nk, cur.KID)
@@ -168,7 +168,7 @@ func main() {
 		}
 		h := health{OK: true, SecretsStatus: "disabled"}
 		if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
-			if err := secClient.Health(r.Context()); err != nil {
+			if healthErr := secClient.Health(r.Context()); healthErr != nil {
 				h.SecretsStatus = "degraded"
 			} else {
 				h.SecretsStatus = "ok"

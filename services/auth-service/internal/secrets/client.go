@@ -17,7 +17,7 @@ type Client interface {
 }
 
 type Config struct {
-	CacheTTL       time.Duration
+	CacheTTL        time.Duration
 	RefreshInterval time.Duration
 }
 
