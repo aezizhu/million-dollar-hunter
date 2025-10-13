@@ -297,6 +297,11 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+          example:
+            error: "rate_limit"
+            message: "rate limit exceeded"
+            details:
+              dimension: "ip"
   schemas:
     Error:
       type: object

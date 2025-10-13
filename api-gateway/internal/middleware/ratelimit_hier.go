@@ -51,7 +51,7 @@ func RateLimitHier(h *ratelimit.HierarchicalLimiter, cfg config.Config) gin.Hand
 		}
 		if v, exists := c.Get("http_metrics"); exists {
 			if m, ok := v.(*observability.HTTPMetrics); ok && m != nil {
-				m.RateLimitAllowed.WithLabelValues(route, "none").Inc()
+				m.RateLimitAllowed.WithLabelValues(route, "route").Inc()
 			}
 		}
 		c.Next()
