@@ -1,0 +1,15 @@
+title = "gitleaks configuration for Million Dollar Hunter"
+
+[allowlist]
+description = "Allowlist known benign locations (tests/docs/monitoring/CI/templates)"
+paths = [
+  ".*_test\\.go$",
+  "^docs/.*",
+  ".*\\.md$",
+  ".*/\\.env\\.example$",
+  "^monitoring/grafana/auth-slo-dashboard\\.json$",
+  "^monitoring/prometheus/alerting-rules\\.yaml$",
+  "^monitoring/prometheus/recording-rules\\.yaml$",
+  "^\\.github/workflows/.*",
+  ".*/keytool$"
+]
