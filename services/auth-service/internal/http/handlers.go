@@ -106,17 +106,19 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if n >= threshold {
+			limit := threshold
+			remaining := 0
+			resetIn := int((time.Duration(windowMin) * time.Minute).Seconds())
+			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(limit))
+			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+			w.Header().Set("X-RateLimit-Reset", strconv.Itoa(resetIn))
+			w.Header().Set("Retry-After", strconv.Itoa(resetIn))
 			w.Header().Set("Content-Type", "application/json")
-			ttlSec := int(time.Duration(windowMin) * time.Minute / time.Second)
-			w.Header().Set("Retry-After", strconv.Itoa(ttlSec))
-			w.Header().Set("X-RateLimit-Limit", strconv.Itoa(threshold))
-			w.Header().Set("X-RateLimit-Remaining", "0")
-			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(time.Now().Add(time.Duration(ttlSec)*time.Second).Unix(), 10))
 			w.WriteHeader(http.StatusTooManyRequests)
-			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]any{
 				"error":   "rate_limit",
 				"message": "login attempts exceeded",
-				"details": map[string]interface{}{"reason": "auth_lockout"},
+				"details": map[string]string{"reason": "auth_lockout"},
 			})
 			return
 		}

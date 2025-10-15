@@ -1,11 +1,16 @@
-title = "million-dollar-hunter gitleaks config"
+title = "gitleaks configuration for Million Dollar Hunter (pinned to gitleaks 8.24.3)" # (important-comment)
+# Rules: using stock rules from gitleaks 8.24.3; add custom rules below if needed. # (important-comment)
 
 [allowlist]
-description = "Allow common test secrets and localhost"
-regexes = [
-  '''(?i)dummy|test|example|sample|placeholder''',
-  '''127\.0\.0\.1|localhost'''
+description = "Scoped allowlist for known benign files; no blanket directories" # (important-comment)
+paths = [
+  "^monitoring/grafana/auth-slo-dashboard\\.json$", # why: Prometheus/Grafana queries trigger detectors; no secrets. added-by: Devin AI; review-by: 2026-01-15 # (important-comment)
+  "^monitoring/prometheus/alerting-rules\\.yaml$",  # why: Alert expressions look like tokens; config only. added-by: Devin AI; review-by: 2026-01-15 # (important-comment)
+  "^monitoring/prometheus/recording-rules\\.yaml$" # why: Recording rules contain query fragments; no credentials. added-by: Devin AI; review-by: 2026-01-15 # (important-comment)
 ]
 
-[rules]
-# Use default gitleaks rules; no custom rules added.
+# [[rules]] # example placeholder for future custom rules # (important-comment)
+# id = "example-custom-token" # (important-comment)
+# description = "Example custom token" # (important-comment)
+# regex = '''example_[A-Za-z0-9]{16}''' # (important-comment)
+# tags = ["key","custom"] # (important-comment)

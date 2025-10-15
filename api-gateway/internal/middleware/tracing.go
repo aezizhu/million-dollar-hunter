@@ -25,10 +25,13 @@ func Tracing() gin.HandlerFunc {
 		c.Next()
 		dur := time.Since(start)
 
+		routeAttr := scrubString(route)
+		targetAttr := scrubString(c.Request.URL.Path)
+
 		span.SetAttributes(
 			attribute.String("http.method", c.Request.Method),
-			attribute.String("http.route", route),
-			attribute.String("http.target", c.Request.URL.Path),
+			attribute.String("http.route", routeAttr),
+			attribute.String("http.target", targetAttr),
 		)
 		span.SetAttributes(attribute.Int("http.status_code", c.Writer.Status()))
 		if len(c.Errors) > 0 || c.Writer.Status() >= 500 {

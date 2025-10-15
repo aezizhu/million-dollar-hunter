@@ -1,10 +1,13 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 )
 
 type Config struct {
@@ -50,6 +53,40 @@ type WorkerConfig struct {
 	Enabled         bool
 }
 
+type dbSecret struct {
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	User     string `json:"user"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+	SSLMode  string `json:"sslmode"`
+}
+
+type redisSecret struct {
+	Addr     string `json:"addr"`
+	Password string `json:"password"`
+	DB       int    `json:"db"`
+}
+
+func loadSecrets(ctx context.Context) secrets.Client {
+	if os.Getenv("SECRETS_PROVIDER") == "aws" {
+		c, err := secrets.NewAWS(ctx, secrets.AWSConfig{
+			Config: secrets.Config{
+				CacheTTL:        time.Hour,
+				RefreshInterval: time.Minute,
+			},
+			Region: os.Getenv("AWS_REGION"),
+		})
+		if err == nil {
+			return c
+		}
+	}
+	return secrets.NewEnv(secrets.Config{
+		CacheTTL:        time.Hour,
+		RefreshInterval: time.Minute,
+	})
+}
+
 func Load() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
@@ -82,6 +119,63 @@ func Load() (*Config, error) {
 			BatchSize:       getEnvAsInt("WORKER_BATCH_SIZE", 50),
 			Enabled:         getEnvAsBool("WORKER_ENABLED", true),
 		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	sc := loadSecrets(ctx)
+
+	var ds dbSecret
+	if err := sc.GetJSON(ctx, "market/db", &ds); err == nil && ds.Host != "" {
+		cfg.Database.Host = ds.Host
+		if ds.Port != 0 {
+			cfg.Database.Port = ds.Port
+		}
+		if ds.User != "" {
+			cfg.Database.User = ds.User
+		}
+		if ds.Password != "" {
+			cfg.Database.Password = ds.Password
+		}
+		if ds.Name != "" {
+			cfg.Database.DBName = ds.Name
+		}
+		if ds.SSLMode != "" {
+			cfg.Database.SSLMode = ds.SSLMode
+		}
+	}
+
+	var rs redisSecret
+	if err := sc.GetJSON(ctx, "shared/redis", &rs); err == nil {
+		if rs.Addr != "" {
+			host := rs.Addr
+			port := 0
+			for i := len(host) - 1; i >= 0; i-- {
+				if host[i] == ':' {
+					if p, err := strconv.Atoi(host[i+1:]); err == nil {
+						port = p
+					}
+					host = host[:i]
+					break
+				}
+			}
+			if host != "" {
+				cfg.Redis.Host = host
+			}
+			if port > 0 {
+				cfg.Redis.Port = port
+			}
+		}
+		if rs.Password != "" {
+			cfg.Redis.Password = rs.Password
+		}
+		if rs.DB != 0 {
+			cfg.Redis.DB = rs.DB
+		}
+	}
+
+	if s, err := sc.Get(ctx, "market/coingecko"); err == nil && s != "" {
+		cfg.CoinGecko.APIKey = s
 	}
 
 	return cfg, nil
