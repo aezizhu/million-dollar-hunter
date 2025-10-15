@@ -54,3 +54,12 @@ func (s *PGStore) CountRecentLoginFailures(ctx context.Context, userID *string, 
 	err := s.Pool.QueryRow(ctx, q, interval, userID).Scan(&n)
 	return n, err
 }
+
+func (s *PGStore) CleanupOldAudit(ctx context.Context, maxAge time.Duration) (int64, error) {
+	const q = `DELETE FROM auth_audit WHERE created_at < NOW() - $1::interval`
+	res, err := s.Pool.Exec(ctx, q, maxAge.String())
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected(), nil
+}

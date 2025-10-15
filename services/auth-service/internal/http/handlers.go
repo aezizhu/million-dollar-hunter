@@ -113,7 +113,13 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
 			w.Header().Set("X-RateLimit-Reset", strconv.Itoa(resetIn))
 			w.Header().Set("Retry-After", strconv.Itoa(resetIn))
-			http.Error(w, "too many attempts", http.StatusTooManyRequests)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error":   "rate_limit",
+				"message": "login attempts exceeded",
+				"details": map[string]string{"reason": "auth_lockout"},
+			})
 			return
 		}
 	}

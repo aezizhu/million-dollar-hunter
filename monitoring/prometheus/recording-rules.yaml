@@ -1,0 +1,12 @@
+groups:
+  - name: auth-slo-recording
+    interval: 1m
+    rules:
+      - record: auth:validation_p99
+        expr: histogram_quantile(0.99, sum by (le) (rate(auth_grpc_validation_duration_seconds_bucket[5m])))
+      - record: auth:validation_error_rate
+        expr: sum(rate(auth_grpc_validation_total{outcome="error"}[5m])) / sum(rate(auth_grpc_validation_total[5m]))
+      - record: gateway:login_p99
+        expr: histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{route="/auth/login"}[5m])))
+      - record: auth:availability_5m
+        expr: 1 - auth:validation_error_rate

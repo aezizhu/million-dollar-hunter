@@ -175,6 +175,26 @@ func main() {
 		s.RefreshTokens = pg
 		s.Audit = pg
 		defer pool.Close()
+
+		auditRetention := 90 * 24 * time.Hour
+		if retStr := os.Getenv("AUDIT_RETENTION_HOURS"); retStr != "" {
+			if duration, parseErr := time.ParseDuration(retStr); parseErr == nil {
+				auditRetention = duration
+			} else {
+				log.Warn().Err(parseErr).Str("value", retStr).Msg("Invalid AUDIT_RETENTION_HOURS, using default 90 days")
+			}
+		}
+		go func() {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				if rows, cleanupErr := pg.CleanupOldAudit(context.Background(), auditRetention); cleanupErr != nil {
+					log.Warn().Err(cleanupErr).Msg("audit cleanup failed")
+				} else if rows > 0 {
+					log.Info().Int64("rows", rows).Msg("cleaned up old audit logs")
+				}
+			}
+		}()
 	}
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		type health struct {
