@@ -3,6 +3,7 @@ package jwtmgr
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -13,8 +14,13 @@ type Manager struct {
 	audience   string
 	accessTTL  time.Duration
 	refreshTTL time.Duration
-	signingKey []byte    // Legacy: single key for backward compatibility
-	keyStore   *KeyStore // New: multi-key support
+
+	mu         sync.RWMutex
+	signingKey []byte
+	keys       map[string][]byte
+	currentKID string
+
+	keyStore *KeyStore
 }
 
 type Claims struct {
@@ -30,7 +36,7 @@ func New(issuer, audience string, accessTTL, refreshTTL time.Duration, signingKe
 		accessTTL:  accessTTL,
 		refreshTTL: refreshTTL,
 		signingKey: signingKey,
-		keyStore:   nil, // Legacy mode: no key store
+		keyStore:   nil,
 	}
 }
 
@@ -44,6 +50,55 @@ func NewWithKeyStore(issuer, audience string, accessTTL, refreshTTL time.Duratio
 		signingKey: nil,
 		keyStore:   ks,
 	}
+}
+
+func NewWithKeys(issuer, audience string, accessTTL, refreshTTL time.Duration, keys map[string][]byte, currentKID string) *Manager {
+	cp := make(map[string][]byte, len(keys))
+	for k, v := range keys {
+		cp[k] = append([]byte(nil), v...)
+	}
+	return &Manager{
+		issuer:     issuer,
+		audience:   audience,
+		accessTTL:  accessTTL,
+		refreshTTL: refreshTTL,
+		keys:       cp,
+		currentKID: currentKID,
+	}
+}
+
+func (m *Manager) currentKey() []byte {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.keys != nil && m.currentKID != "" {
+		if k, ok := m.keys[m.currentKID]; ok {
+			return k
+		}
+	}
+	return m.signingKey
+}
+
+func (m *Manager) keyByKID(kid string) []byte {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.keys == nil {
+		return m.signingKey
+	}
+	if k, ok := m.keys[kid]; ok {
+		return k
+	}
+	return m.signingKey
+}
+
+func (m *Manager) UpdateKeys(keys map[string][]byte, currentKID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make(map[string][]byte, len(keys))
+	for k, v := range keys {
+		cp[k] = append([]byte(nil), v...)
+	}
+	m.keys = cp
+	m.currentKID = currentKID
 }
 
 func (m *Manager) GenerateToken(userID, email string, ttl time.Duration) (string, time.Time, error) {
@@ -77,7 +132,10 @@ func (m *Manager) GenerateToken(userID, email string, ttl time.Duration) (string
 	}
 
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	s, err := t.SignedString(m.signingKey)
+	if m.currentKID != "" {
+		t.Header["kid"] = m.currentKID
+	}
+	s, err := t.SignedString(m.currentKey())
 	return s, exp, err
 }
 
@@ -117,12 +175,18 @@ func (m *Manager) ValidateToken(tokenStr string, expectedAud string) (*Claims, e
 				}
 				return key.PublicKey, nil
 			}
+			if m.signingKey != nil {
+				return m.signingKey, nil
+			}
+			return nil, errors.New("missing kid for RSA token")
 		}
 
-		if m.signingKey != nil {
-			return m.signingKey, nil
+		if kid, ok := token.Header["kid"].(string); ok && kid != "" {
+			return m.keyByKID(kid), nil
 		}
-
+		if k := m.currentKey(); k != nil {
+			return k, nil
+		}
 		return nil, errors.New("no valid signing key found")
 	})
 

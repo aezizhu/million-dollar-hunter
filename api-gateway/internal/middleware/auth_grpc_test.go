@@ -2,6 +2,11 @@ package middleware
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -260,6 +265,7 @@ func TestAuth_GRPCMode_FallbackToLocal_JWT_Succeeds(t *testing.T) {
 	claims := jwt.MapClaims{
 		"sub": "u-local",
 		"exp": time.Now().Add(5 * time.Minute).Unix(),
+		"aud": "aud",
 	}
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenStr, err := tok.SignedString([]byte("devsecret"))
@@ -274,5 +280,56 @@ func TestAuth_GRPCMode_FallbackToLocal_JWT_Succeeds(t *testing.T) {
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 with fallback local jwt, got %d", w.Code)
+	}
+}
+
+func TestAuth_GRPCMode_FallbackToLocal_RS256_Succeeds(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	cfg := config.Config{
+		AuthValidateMode:        "grpc",
+		JWTAudience:             "aud",
+		AuthGRPCTimeoutMs:       1,
+		AuthGRPCFallbackToLocal: true,
+		JWTIssuer:               "issuer",
+	}
+
+	rsaPriv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("generate rsa key: %v", err)
+	}
+	pubASN1, err := x509.MarshalPKIXPublicKey(&rsaPriv.PublicKey)
+	if err != nil {
+		t.Fatalf("marshal pub: %v", err)
+	}
+	pubPEM := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubASN1})
+
+	t.Setenv("ENV", "dev")
+	t.Setenv("SECRETS_PROVIDER", "env")
+	t.Setenv("MDH_DEV_AUTH_JWT_CURRENT", fmt.Sprintf(`{"kid":"k1","key":%q}`, string(pubPEM)))
+
+	r.Use(Auth(cfg, nil))
+	r.GET("/x", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	claims := jwt.MapClaims{
+		"sub": "u-rs",
+		"exp": time.Now().Add(5 * time.Minute).Unix(),
+		"iss": "issuer",
+		"aud": "aud",
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	tok.Header["kid"] = "k1"
+	tokenStr, err := tok.SignedString(rsaPriv)
+	if err != nil {
+		t.Fatalf("sign jwt: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/x", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 with RS256 local validation, got %d", w.Code)
 	}
 }
