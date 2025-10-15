@@ -80,6 +80,7 @@ func TestIntegration_KeyStore_TokenGeneration_Validation(t *testing.T) {
 	go func() { _ = srv.Serve(lis) }()
 	defer srv.Stop()
 
+	//nolint:staticcheck // grpc.Dial is required for bufconn in tests (important-comment)
 	conn, err := grpc.Dial("bufnet",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {

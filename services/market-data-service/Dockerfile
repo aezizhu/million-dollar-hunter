@@ -8,6 +8,7 @@ COPY go.work go.work.sum* ./
 COPY services/ ./services/
 COPY api-gateway/ ./api-gateway/
 COPY ingestion-service/ ./ingestion-service/
+COPY pkg/ ./pkg/
 WORKDIR /workspace/services/market-data-service
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
