@@ -1,4 +1,3 @@
-
 package tests
 
 import (
@@ -81,7 +80,7 @@ func TestIntegration_KeyStore_TokenGeneration_Validation(t *testing.T) {
 	go func() { _ = srv.Serve(lis) }()
 	defer srv.Stop()
 
-	conn, err := grpc.DialContext(context.Background(), "bufnet",
+	conn, err := grpc.NewClient("bufnet",
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
 			return lis.Dial()
@@ -143,8 +142,8 @@ func TestIntegration_KeyRotation_WithActiveSessions(t *testing.T) {
 		t.Fatalf("Failed to generate second key: %v", err)
 	}
 
-	if err := ks.ActivateKey(kid2); err != nil {
-		t.Fatalf("Failed to activate second key: %v", err)
+	if activateErr := ks.ActivateKey(kid2); activateErr != nil {
+		t.Fatalf("Failed to activate second key: %v", activateErr)
 	}
 
 	token2, _, _, err := manager.GeneratePair("user2", "user2@example.com")
@@ -197,8 +196,8 @@ func TestIntegration_MultipleKeys_ConcurrentValidation(t *testing.T) {
 		kids[i] = kid
 
 		if i > 0 {
-			if err := ks.ActivateKey(kid); err != nil {
-				t.Fatalf("Failed to activate key %d: %v", i, err)
+			if activateErr := ks.ActivateKey(kid); activateErr != nil {
+				t.Fatalf("Failed to activate key %d: %v", i, activateErr)
 			}
 		}
 

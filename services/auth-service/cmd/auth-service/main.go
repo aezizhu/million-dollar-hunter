@@ -15,12 +15,12 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"google.golang.org/grpc"
 
+	secrets "github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/config"
 	grpcserver "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/grpc"
 	httpapi "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/http"
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
-	secrets "github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
