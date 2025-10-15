@@ -92,7 +92,7 @@ func main() {
 		s.RefreshTokens = pg
 		s.Audit = pg
 		defer pool.Close()
-		
+
 		auditRetention := 90 * 24 * time.Hour
 		if retStr := os.Getenv("AUDIT_RETENTION_HOURS"); retStr != "" {
 			if duration, parseErr := time.ParseDuration(retStr); parseErr == nil {
