@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"strconv"
+
+	"github.com/rs/zerolog"
 )
 
 type Config struct {
@@ -29,6 +31,13 @@ type Config struct {
 	OpenAPIPath             string
 	RouteLimitsJSON         string
 	StrictOpenAPIValidation bool
+
+	RateLimitAllowlist    string
+	RateLimitBypassHeader string
+	IPRateLimitRPS        int
+	IPRateLimitBurst      int
+	UserRateLimitRPS      int
+	UserRateLimitBurst    int
 	EnableHSTS              bool
 	HSTSEnabled             bool
 	HSTSMaxAge              int
@@ -94,6 +103,13 @@ func Load() Config {
 		OpenAPIPath:             getenv("OPENAPI_PATH", "../docs/openapi.yaml"),
 		RouteLimitsJSON:         os.Getenv("ROUTE_LIMITS"),
 		StrictOpenAPIValidation: getenvBool("STRICT_OPENAPI_VALIDATION", false),
+
+		RateLimitAllowlist:    os.Getenv("RATE_LIMIT_ALLOWLIST"),
+		RateLimitBypassHeader: os.Getenv("RATE_LIMIT_BYPASS_HEADER"),
+		IPRateLimitRPS:        getenvInt("IP_RATE_LIMIT_RPS", 0),
+		IPRateLimitBurst:      getenvInt("IP_RATE_LIMIT_BURST", 0),
+		UserRateLimitRPS:      getenvInt("USER_RATE_LIMIT_RPS", 0),
+		UserRateLimitBurst:    getenvInt("USER_RATE_LIMIT_BURST", 0),
 		EnableHSTS:              getenvBool("ENABLE_HSTS", false),
 		HSTSEnabled:             hstsEnabled,
 		HSTSMaxAge:              getenvInt("HSTS_MAX_AGE", 15552000),
@@ -104,4 +120,30 @@ func Load() Config {
 		COOP:                    getenv("CROSS_ORIGIN_OPENER_POLICY", ""),
 		PermissionsPolicy:       getenv("PERMISSIONS_POLICY", ""),
 	}
+}
+
+
+func (c Config) Validate(logger zerolog.Logger) {
+	if c.IPRateLimitRPS < 0 {
+		logger.Warn().Str("env", "IP_RATE_LIMIT_RPS").Msg("negative value; treating as 0 (inherit defaults)")
+	}
+	if c.IPRateLimitBurst < 0 {
+		logger.Warn().Str("env", "IP_RATE_LIMIT_BURST").Msg("negative value; treating as 0 (inherit defaults)")
+	}
+	if c.UserRateLimitRPS < 0 {
+		logger.Warn().Str("env", "USER_RATE_LIMIT_RPS").Msg("negative value; treating as 0 (inherit defaults)")
+	}
+	if c.UserRateLimitBurst < 0 {
+		logger.Warn().Str("env", "USER_RATE_LIMIT_BURST").Msg("negative value; treating as 0 (inherit defaults)")
+	}
+	if c.IPRateLimitBurst > 0 && c.IPRateLimitRPS > c.IPRateLimitBurst {
+		logger.Warn().Int("rps", c.IPRateLimitRPS).Int("burst", c.IPRateLimitBurst).Msg("IP_RATE_LIMIT_RPS exceeds IP_RATE_LIMIT_BURST")
+	}
+	if c.UserRateLimitBurst > 0 && c.UserRateLimitRPS > c.UserRateLimitBurst {
+		logger.Warn().Int("rps", c.UserRateLimitRPS).Int("burst", c.UserRateLimitBurst).Msg("USER_RATE_LIMIT_RPS exceeds USER_RATE_LIMIT_BURST")
+	}
+	logger.Info().
+		Int("ip_rps", c.IPRateLimitRPS).Int("ip_burst", c.IPRateLimitBurst).
+		Int("user_rps", c.UserRateLimitRPS).Int("user_burst", c.UserRateLimitBurst).
+		Msg("effective rate limits")
 }
