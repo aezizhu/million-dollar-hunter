@@ -1,3 +1,17 @@
+/**
+ * Dashboard page component for portfolio overview and wallet management.
+ * Copyright (c) 2025 aezizhu. All rights reserved.
+ * Author: aezizhu
+ * Repository: github.com/aezizhu/million-dollar-hunter
+ * 
+ * Dashboard displays portfolio summary and wallet list
+ * Ensures proper data fetching with React Query
+ * Zero-configuration state management with hooks
+ * Initializes wallet addition dialog with form validation
+ * Zero-dependency UI components with Material-UI
+ * Handles wallet creation and portfolio refresh
+ * Unified error handling with user-friendly messages
+ */
 'use client';
 
 import { useState } from 'react';

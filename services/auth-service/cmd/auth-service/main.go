@@ -1,7 +1,12 @@
+// Package main provides the authentication service entry point.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +19,7 @@ import (
 	"github.com/rs/zerolog/hlog"
 	"google.golang.org/grpc"
 
+	secrets "github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/config"
 	grpcserver "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/grpc"
@@ -21,6 +27,19 @@ import (
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
+
+// Authentication service main entry point
+// Ensures secure JWT token generation and validation
+// Zero-trust architecture with key rotation support
+// Initializes database connections and gRPC handlers
+// Zero-downtime key rotation with backward compatibility
+// Handles both MVP and multi-user authentication modes
+// Unified secrets management with AWS integration
+
+type jwtSecret struct {
+	KID string `json:"kid"`
+	Key string `json:"key"`
+}
 
 func main() {
 	log := zerolog.New(os.Stdout).With().Timestamp().Logger()
@@ -62,6 +81,59 @@ func main() {
 		log.Info().Msg("Running in multi-user mode")
 	}
 
+	var secClient secrets.Client
+	switch strings.ToLower(os.Getenv("SECRETS_PROVIDER")) {
+	case "aws":
+		region := os.Getenv("AWS_REGION")
+		awsClient, awsErr := secrets.NewAWS(context.Background(), secrets.AWSConfig{
+			Config: secrets.Config{
+				CacheTTL:        time.Hour,
+				RefreshInterval: time.Minute,
+			},
+			Region: region,
+		})
+		if awsErr != nil {
+			log.Error().Err(awsErr).Msg("failed to init AWS secrets client, falling back to env")
+			secClient = secrets.NewEnv(secrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
+		} else {
+			secClient = awsClient
+		}
+	default:
+		secClient = secrets.NewEnv(secrets.Config{CacheTTL: time.Hour, RefreshInterval: time.Minute})
+	}
+	if secClient != nil {
+		secClient.StartBackgroundRefresh(context.Background())
+	}
+
+	keys := cfg.JWTKeys
+	currentKID := cfg.JWTCurrentKID
+
+	secretPrefix := os.Getenv("SECRETS_PREFIX")
+	if secretPrefix == "" {
+		env := os.Getenv("ENV")
+		if env == "" {
+			env = "dev"
+		}
+		secretPrefix = "mdh/" + env + "/auth/jwt"
+	}
+	if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
+		var cur jwtSecret
+		if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); getErr == nil && cur.KID != "" && cur.Key != "" {
+			if keys == nil {
+				keys = map[string][]byte{}
+			}
+			keys[cur.KID] = []byte(cur.Key)
+			currentKID = cur.KID
+		}
+		var prev jwtSecret
+		if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); getErr == nil && prev.KID != "" && prev.Key != "" {
+			if keys == nil {
+				keys = map[string][]byte{}
+			}
+			keys[prev.KID] = []byte(prev.Key)
+		}
+	}
+
 	var j interface {
 		GeneratePair(userID, email string) (string, string, time.Time, error)
 		ValidateToken(tokenStr string, expectedAud string) (*jwtmgr.Claims, error)
@@ -75,8 +147,31 @@ func main() {
 		j = jwtmgr.NewWithKeyStore(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, ks)
 		log.Info().Str("keystore", keystorePath).Msg("Using RS256 keystore mode")
 	} else {
-		j = jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
-		log.Info().Msg("Using HS256 legacy mode")
+		var mgr *jwtmgr.Manager
+		if currentKID != "" && len(keys) > 0 {
+			mgr = jwtmgr.NewWithKeys(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, keys, currentKID)
+		} else {
+			mgr = jwtmgr.New(cfg.JWTIssuer, cfg.JWTAudience, cfg.AccessTTL, cfg.RefreshTTL, cfg.JWTSigningKey)
+		}
+		j = mgr
+
+		if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
+			go func() {
+				t := time.NewTicker(1 * time.Minute)
+				defer t.Stop()
+				for range t.C {
+					var cur jwtSecret
+					if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/current", &cur); getErr == nil && cur.KID != "" && cur.Key != "" {
+						nk := map[string][]byte{cur.KID: []byte(cur.Key)}
+						var prev jwtSecret
+						if getErr := secClient.GetJSON(context.Background(), secretPrefix+"/previous", &prev); getErr == nil && prev.KID != "" && prev.Key != "" {
+							nk[prev.KID] = []byte(prev.Key)
+						}
+						mgr.UpdateKeys(nk, cur.KID)
+					}
+				}
+			}()
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -92,8 +187,42 @@ func main() {
 		s.RefreshTokens = pg
 		s.Audit = pg
 		defer pool.Close()
+
+		auditRetention := 90 * 24 * time.Hour
+		if retStr := os.Getenv("AUDIT_RETENTION_HOURS"); retStr != "" {
+			if duration, parseErr := time.ParseDuration(retStr); parseErr == nil {
+				auditRetention = duration
+			} else {
+				log.Warn().Err(parseErr).Str("value", retStr).Msg("Invalid AUDIT_RETENTION_HOURS, using default 90 days")
+			}
+		}
+		go func() {
+			ticker := time.NewTicker(24 * time.Hour)
+			defer ticker.Stop()
+			for range ticker.C {
+				if rows, cleanupErr := pg.CleanupOldAudit(context.Background(), auditRetention); cleanupErr != nil {
+					log.Warn().Err(cleanupErr).Msg("audit cleanup failed")
+				} else if rows > 0 {
+					log.Info().Int64("rows", rows).Msg("cleaned up old audit logs")
+				}
+			}
+		}()
 	}
-	mux.HandleFunc("/healthz", s.Health)
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		type health struct {
+			OK            bool   `json:"ok"`
+			SecretsStatus string `json:"secrets"`
+		}
+		h := health{OK: true, SecretsStatus: "disabled"}
+		if secClient != nil && strings.ToLower(os.Getenv("SECRETS_PROVIDER")) != "" {
+			if healthErr := secClient.Health(r.Context()); healthErr != nil {
+				h.SecretsStatus = "degraded"
+			} else {
+				h.SecretsStatus = "ok"
+			}
+		}
+		_ = json.NewEncoder(w).Encode(h)
+	})
 	mux.HandleFunc("/api/v1/auth/login", s.Login)
 	mux.HandleFunc("/api/v1/auth/register", s.Register)
 	mux.HandleFunc("/api/v1/auth/logout", s.Logout)

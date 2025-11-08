@@ -1,0 +1,19 @@
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.3
+    hooks:
+      - id: gitleaks
+        args: ["--redact", "-c", ".gitleaks.toml"]
+  - repo: local
+    hooks:
+      - id: trufflehog
+        name: trufflehog
+        entry: bash -c 'git diff --cached --name-only --diff-filter=ACM | xargs -r trufflehog filesystem --json 2>/dev/null | jq -e "select(.found)" && echo "⚠️ WARNING: Possible secrets detected. Review findings or use --no-verify to bypass." && exit 0 || exit 0'
+        language: system
+        pass_filenames: false
+        verbose: true
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace

@@ -1,3 +1,9 @@
+/**
+ * API client for Million Dollar Hunter frontend.
+ * Copyright (c) 2025 aezizhu. All rights reserved.
+ * Author: aezizhu
+ * Repository: github.com/aezizhu/million-dollar-hunter
+ */
 import axios, { AxiosError } from 'axios';
 import type {
   LoginRequest,

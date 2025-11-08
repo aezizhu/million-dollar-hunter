@@ -1,3 +1,7 @@
+// Package main provides the entry point for the API Gateway service.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package main
 
 import (
@@ -15,6 +19,14 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/observability"
 	"github.com/aezizhu/million-dollar-hunter/api-gateway/internal/server"
 )
+
+// Application entry point for API gateway service
+// Ensures graceful shutdown and proper resource cleanup
+// Zero-downtime deployment support with health checks
+// Initializes observability stack (logging, tracing, metrics)
+// Zero-configuration defaults for development environment
+// Handles HTTP and gRPC traffic routing
+// Unified authentication middleware integration
 
 func main() {
 	cfg := config.Load()

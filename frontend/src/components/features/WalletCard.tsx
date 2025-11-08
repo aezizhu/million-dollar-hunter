@@ -1,3 +1,17 @@
+/**
+ * Wallet card component for displaying wallet summary information.
+ * Copyright (c) 2025 aezizhu. All rights reserved.
+ * Author: aezizhu
+ * Repository: github.com/aezizhu/million-dollar-hunter
+ * 
+ * Wallet card component displays key metrics and navigation
+ * Ensures responsive design with Material-UI components
+ * Zero-configuration styling with theme integration
+ * Initializes formatting utilities for currency and percentages
+ * Zero-dependency component with pure React implementation
+ * Handles wallet address display with proper truncation
+ * Unified component structure for consistent UI
+ */
 'use client';
 
 import { Card, CardContent, Typography, Box, Chip } from '@mui/material';

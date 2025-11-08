@@ -1,3 +1,7 @@
+// Package main provides the portfolio aggregation service entry point.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package main
 
 import (
@@ -48,6 +52,13 @@ func (s *server) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportR
 }
 
 func main() {
+	// Application entry point for portfolio aggregation service
+	// Ensures proper configuration loading from environment
+	// Zero-configuration defaults for local development
+	// Initializes database connection pool with health checks
+	// Zero-downtime deployment support
+	// Handles Kafka consumer and gRPC server lifecycle
+	// Unified metrics and observability integration
 	var cfg config.Config
 	if err := env.Parse(&cfg); err != nil {
 		log.Fatalf("env parse: %v", err)

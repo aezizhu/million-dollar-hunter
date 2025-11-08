@@ -1,3 +1,9 @@
+/**
+ * Authentication hook for managing user session state.
+ * Copyright (c) 2025 aezizhu. All rights reserved.
+ * Author: aezizhu
+ * Repository: github.com/aezizhu/million-dollar-hunter
+ */
 'use client';
 
 import { useState, useEffect } from 'react';

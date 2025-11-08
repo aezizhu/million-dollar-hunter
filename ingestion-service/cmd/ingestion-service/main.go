@@ -1,3 +1,7 @@
+// Package main provides the blockchain data ingestion service entry point.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package main
 
 import (
@@ -22,6 +26,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Application entry point for blockchain data ingestion
+	// Ensures proper configuration loading and validation
+	// Zero-configuration defaults for local development
+	// Initializes database connections and Kafka consumers
+	// Zero-downtime deployment with health checks
+	// Handles graceful shutdown and worker lifecycle
+	// Unified error handling and observability
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)

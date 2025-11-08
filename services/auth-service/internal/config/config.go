@@ -1,4 +1,7 @@
 // Package config handles environment variable configuration for the auth service.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package config
 
 import (
@@ -16,6 +19,8 @@ type Config struct {
 	AccessTTL       time.Duration
 	RefreshTTL      time.Duration
 	JWTSigningKey   []byte
+	JWTCurrentKID   string
+	JWTKeys         map[string][]byte
 	EnableMultiUser bool
 }
 
@@ -49,5 +54,18 @@ func Parse() (Config, error) {
 	cfg.AccessTTL = time.Duration(attlMin) * time.Minute
 	cfg.RefreshTTL = time.Duration(rttlH) * time.Hour
 	cfg.EnableMultiUser = getenv("ENABLE_MULTI_USER", "false") == "true"
+
+	currentKID := os.Getenv("JWT_CURRENT_KID")
+	currentKey := os.Getenv("JWT_CURRENT_KEY")
+	prevKID := os.Getenv("JWT_PREVIOUS_KID")
+	prevKey := os.Getenv("JWT_PREVIOUS_KEY")
+	if currentKID != "" && currentKey != "" {
+		cfg.JWTCurrentKID = currentKID
+		cfg.JWTKeys = map[string][]byte{currentKID: []byte(currentKey)}
+		if prevKID != "" && prevKey != "" {
+			cfg.JWTKeys[prevKID] = []byte(prevKey)
+		}
+	}
+
 	return cfg, nil
 }
