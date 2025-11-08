@@ -1,3 +1,7 @@
+// Package main provides the portfolio aggregation service entry point.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package main
 
 import (
@@ -48,7 +52,7 @@ func (s *server) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportR
 }
 
 func main() {
-	// Portfolio service initialization
+	// Application entry point for portfolio aggregation service
 	// Ensures proper configuration loading from environment
 	// Zero-configuration defaults for local development
 	// Initializes database connection pool with health checks

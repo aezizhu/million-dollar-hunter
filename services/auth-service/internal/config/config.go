@@ -1,4 +1,7 @@
 // Package config handles environment variable configuration for the auth service.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package config
 
 import (

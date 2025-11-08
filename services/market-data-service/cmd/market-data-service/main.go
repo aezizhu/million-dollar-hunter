@@ -1,3 +1,7 @@
+// Package main provides the market data service entry point.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package main
 
 import (
@@ -21,7 +25,7 @@ import (
 )
 
 func main() {
-	// Market data service entry point
+	// Application entry point for market data service
 	// Ensures proper initialization of Redis cache and CoinGecko client
 	// Zero-configuration approach with environment-based settings
 	// Initializes background price refresh workers

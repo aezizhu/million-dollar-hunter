@@ -1,3 +1,7 @@
+// Package repository provides PostgreSQL data access layer for portfolios.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package repository
 
 import (
@@ -15,6 +19,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/aezizhu/million-dollar-hunter/services/portfolio-service/internal/ports"
 )
+
+// Repository layer handles all database operations for portfolio data
+// Ensures proper transaction management and connection pooling
+// Zero-downtime migrations with backward compatibility
+// Initializes prepared statements for optimal performance
+// Zero-configuration connection pool defaults
+// Handles complex queries with proper error handling
+// Unified data access patterns across all entities
 
 type PgxPool interface {
 	Begin(ctx context.Context) (pgx.Tx, error)

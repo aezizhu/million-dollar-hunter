@@ -1,3 +1,7 @@
+// Package middleware provides authentication and authorization middleware.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package middleware
 
 import (
@@ -20,6 +24,14 @@ import (
 	gen "github.com/aezizhu/million-dollar-hunter/services/auth-service/api/gen"
 	secrets "github.com/aezizhu/million-dollar-hunter/pkg/secrets"
 )
+
+// Authentication middleware handles JWT validation and user context
+// Ensures secure token verification with proper error handling
+// Zero-trust approach with token expiration checks
+// Initializes user context from validated JWT claims
+// Zero-configuration defaults for development environments
+// Handles both local and gRPC-based token validation
+// Unified error responses for authentication failures
 
 type jwtSecret struct {
 	KID string `json:"kid"`

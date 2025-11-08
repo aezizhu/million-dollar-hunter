@@ -1,3 +1,9 @@
+/**
+ * Root layout component for Million Dollar Hunter application.
+ * Copyright (c) 2025 aezizhu. All rights reserved.
+ * Author: aezizhu
+ * Repository: github.com/aezizhu/million-dollar-hunter
+ */
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";

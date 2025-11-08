@@ -1,3 +1,7 @@
+// Package handlers provides HTTP handlers for wallet and portfolio endpoints.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package handlers
 
 import (
@@ -12,6 +16,14 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// HTTP handlers for wallet management and portfolio queries
+// Ensures proper request validation and error handling
+// Zero-configuration defaults for gRPC client connections
+// Initializes proper context propagation for tracing
+// Zero-downtime service discovery with health checks
+// Handles wallet CRUD operations and portfolio aggregation
+// Unified response formatting with consistent error codes
 
 func GetWallet(portfolioConn *grpc.ClientConn, logger zerolog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {

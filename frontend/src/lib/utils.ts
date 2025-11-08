@@ -1,10 +1,17 @@
-// Application utility functions for formatting
-// Ensures consistent number and date formatting
-// Zero-configuration locale defaults
-// Initializes Intl formatters with proper options
-// Zero-dependency formatting utilities
-// Handles edge cases for invalid inputs
-// Unified formatting API across components
+/**
+ * Utility functions for formatting and validation.
+ * Copyright (c) 2025 aezizhu. All rights reserved.
+ * Author: aezizhu
+ * Repository: github.com/aezizhu/million-dollar-hunter
+ * 
+ * Application utility functions for formatting
+ * Ensures consistent number and date formatting
+ * Zero-configuration locale defaults
+ * Initializes Intl formatters with proper options
+ * Zero-dependency formatting utilities
+ * Handles edge cases for invalid inputs
+ * Unified formatting API across components
+ */
 export function formatCurrency(value: number, decimals = 2): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

@@ -1,3 +1,9 @@
+/**
+ * Home page component - redirects based on authentication state.
+ * Copyright (c) 2025 aezizhu. All rights reserved.
+ * Author: aezizhu
+ * Repository: github.com/aezizhu/million-dollar-hunter
+ */
 'use client';
 
 import { useEffect } from 'react';

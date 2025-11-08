@@ -1,3 +1,7 @@
+// Package jwtmgr provides JWT token generation and validation.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package jwtmgr
 
 import (

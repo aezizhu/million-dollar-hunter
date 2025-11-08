@@ -1,3 +1,7 @@
+// Package service provides portfolio aggregation and query services.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package service
 
 import (

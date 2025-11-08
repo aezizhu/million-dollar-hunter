@@ -1,3 +1,7 @@
+// Package server provides HTTP router and middleware setup for the API Gateway.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package server
 
 import (

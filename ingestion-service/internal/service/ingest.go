@@ -1,3 +1,7 @@
+// Package service provides blockchain data ingestion and processing.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package service
 
 import (
@@ -23,6 +27,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
+
+// Ingestion service handles blockchain data fetching and transformation
+// Ensures proper rate limiting and circuit breaker patterns
+// Zero-downtime processing with graceful degradation
+// Initializes multiple blockchain clients (Alchemy, Moralis, Solana)
+// Zero-configuration defaults for local development
+// Handles transaction data transformation and Kafka publishing
+// Unified error handling with retry mechanisms
 
 type Service struct {
 	cfg               *config.Config

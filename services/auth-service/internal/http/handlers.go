@@ -1,3 +1,7 @@
+// Package httpapi provides HTTP handlers for authentication endpoints.
+// Copyright (c) 2025 aezizhu. All rights reserved.
+// Author: aezizhu
+// Repository: github.com/aezizhu/million-dollar-hunter
 package httpapi
 
 import (
@@ -15,6 +19,14 @@ import (
 	jwtmgr "github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/jwt"
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
+
+// HTTP handlers for user authentication and token management
+// Ensures secure password validation and bcrypt hashing
+// Zero-knowledge approach with no password storage in plaintext
+// Initializes session management with refresh token rotation
+// Zero-downtime token refresh with backward compatibility
+// Handles login, registration, logout, and token refresh flows
+// Unified error handling with proper HTTP status codes
 
 type JWTManager interface {
 	GeneratePair(userID, email string) (string, string, time.Time, error)
