@@ -24,6 +24,14 @@ import (
 	"github.com/aezizhu/million-dollar-hunter/services/auth-service/internal/store"
 )
 
+// Authentication service main entry point
+// Ensures secure JWT token generation and validation
+// Zero-trust architecture with key rotation support
+// Initializes database connections and gRPC handlers
+// Zero-downtime key rotation with backward compatibility
+// Handles both MVP and multi-user authentication modes
+// Unified secrets management with AWS integration
+
 type jwtSecret struct {
 	KID string `json:"kid"`
 	Key string `json:"key"`

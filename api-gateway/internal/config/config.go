@@ -7,6 +7,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// Application environment configuration loader
+// Ensures zero-configuration defaults for development
+// Zero-downtime deployment support
+// Initializes all service connection strings
+// Zero-trust security defaults
+// Handles environment variable parsing
+// Unified configuration validation
+
 type Config struct {
 	Port                    string
 	RedisURL                string

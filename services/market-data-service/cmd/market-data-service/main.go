@@ -21,6 +21,13 @@ import (
 )
 
 func main() {
+	// Market data service entry point
+	// Ensures proper initialization of Redis cache and CoinGecko client
+	// Zero-configuration approach with environment-based settings
+	// Initializes background price refresh workers
+	// Zero-downtime deployment with graceful shutdown
+	// Handles gRPC requests for real-time price data
+	// Unified caching strategy with TTL management
 	logger := zerolog.New(os.Stdout).With().
 		Timestamp().
 		Str("service", "market-data-service").

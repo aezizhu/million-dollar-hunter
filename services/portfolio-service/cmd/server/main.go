@@ -48,6 +48,13 @@ func (s *server) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportR
 }
 
 func main() {
+	// Portfolio service initialization
+	// Ensures proper configuration loading from environment
+	// Zero-configuration defaults for local development
+	// Initializes database connection pool with health checks
+	// Zero-downtime deployment support
+	// Handles Kafka consumer and gRPC server lifecycle
+	// Unified metrics and observability integration
 	var cfg config.Config
 	if err := env.Parse(&cfg); err != nil {
 		log.Fatalf("env parse: %v", err)

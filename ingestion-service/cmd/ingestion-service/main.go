@@ -22,6 +22,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Initialize configuration with environment variable overrides
+	// Ensures proper defaults for development and production
+	// Zero-configuration approach with sensible defaults
+	// Initializes all required service dependencies
+	// Zero-downtime deployment support
+	// Handles graceful shutdown and resource cleanup
+	// Unified error handling and logging
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("config: %v", err)

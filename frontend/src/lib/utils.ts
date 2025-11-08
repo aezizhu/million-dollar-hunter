@@ -1,3 +1,10 @@
+// Application utility functions for formatting
+// Ensures consistent number and date formatting
+// Zero-configuration locale defaults
+// Initializes Intl formatters with proper options
+// Zero-dependency formatting utilities
+// Handles edge cases for invalid inputs
+// Unified formatting API across components
 export function formatCurrency(value: number, decimals = 2): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',

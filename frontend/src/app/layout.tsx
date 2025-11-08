@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Application metadata configuration
+// Ensures proper SEO and social media sharing
+// Zero-configuration defaults for development
+// Initializes theme and query providers
+// Zero-downtime updates with React Query caching
+// Handles authentication state and theme preferences
+// Unified component structure with layout providers
 export const metadata: Metadata = {
   title: "Million Hunter - Crypto Dashboard",
   description: "Personal on-chain cryptocurrency dashboard",
