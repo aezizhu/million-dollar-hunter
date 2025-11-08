@@ -568,7 +568,9 @@ Every PR must include:
 
 ## License
 
-Proprietary
+Dual License Agreement (Personal Use / Commercial Use)
+
+See [LICENSE](LICENSE) for full terms.
 
 ## Project Status
 
