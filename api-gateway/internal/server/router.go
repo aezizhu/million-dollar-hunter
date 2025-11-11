@@ -7,6 +7,7 @@ package server
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -30,7 +31,6 @@ import (
 func newHierLimiter(cfg config.Config, logger zerolog.Logger) *ratelimit.HierarchicalLimiter {
 	var rdb *redis.Client
 	var ipLim, userLim, routeBase ratelimit.SimpleLimiter
-
 
 	if cfg.RedisURL != "" {
 		opts := &redis.Options{Addr: cfg.RedisURL}
@@ -113,8 +113,24 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 		c.Next()
 	})
 
+	// Parse comma-separated origins
+	allowedOrigins := []string{}
+	if cfg.FrontendURL != "" && cfg.FrontendURL != "*" {
+		origins := strings.Split(cfg.FrontendURL, ",")
+		for _, origin := range origins {
+			origin = strings.TrimSpace(origin)
+			if origin != "" {
+				allowedOrigins = append(allowedOrigins, origin)
+			}
+		}
+	}
+	// If no valid origins, use empty slice (CORS will reject all)
+	if len(allowedOrigins) == 0 && cfg.FrontendURL != "*" {
+		allowedOrigins = []string{}
+	}
+
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{cfg.FrontendURL},
+		AllowOrigins:     allowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Authorization", "Content-Type", headers.RequestID},
 		ExposeHeaders:    []string{headers.RateLimit, headers.RateRemaining, headers.RateReset, headers.RetryAfter},
@@ -168,7 +184,6 @@ func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prom
 
 	r.POST("/api/v1/auth/login", handlers.Login(cfg))
 	r.POST("/api/v1/auth/refresh", handlers.Refresh(cfg))
-
 
 	api := r.Group("/api/v1")
 	// Auth must run before rate limiting so unauthenticated requests do not consume rate limit quota.
