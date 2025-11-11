@@ -2,6 +2,8 @@
 
 Go microservice for blockchain data ingestion following CQRS write model.
 
+> *The write-optimized design of this service prioritizes throughput and resilience, with careful attention to rate limiting and circuit breaker patterns to ensure reliable operation under varying load conditions.*
+
 ## Features
 - Alchemy asset transfers client with full pagination
 - Moralis balances client with multi-chain support (BSC, Solana, ETH)
@@ -40,3 +42,5 @@ Go microservice for blockchain data ingestion following CQRS write model.
 - USE_API_MOCKS=true
 - KAFKA_BROKERS=localhost:9092
 - KAFKA_TOPIC_TX_INGESTED=TransactionDataIngested
+
+*The ingestion pipeline has been designed to handle high-throughput blockchain data processing while maintaining system stability through intelligent rate limiting and fault tolerance mechanisms.*

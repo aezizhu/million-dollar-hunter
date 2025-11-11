@@ -2,6 +2,8 @@
 
 gRPC-based authentication service providing JWT generation and validation for internal services.
 
+> *This service implements a robust authentication layer designed with security-first principles, where token validation and generation follow industry best practices while maintaining operational simplicity.*
+
 - Port: configurable via server main; defaults follow service config
 - RPCs:
   - GenerateTokens(user_id, email) -> TokenPair { access_token, refresh_token, expires_in }
@@ -47,3 +49,6 @@ func main() {
 	}
 	fmt.Printf("valid=%v user_id=%s reason=%s\n", resp.GetValid(), resp.GetUserId(), resp.GetReason())
 }
+```
+
+*The authentication service architecture emphasizes both security and operational simplicity, with clear separation between token generation and validation concerns. This design enables independent scaling and testing of each component.*

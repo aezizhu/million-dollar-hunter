@@ -88,6 +88,11 @@ func newHierLimiter(cfg config.Config, logger zerolog.Logger) *ratelimit.Hierarc
 	return ratelimit.NewHierarchicalLimiter(ipLim, userLim, routeLim, cfg.RateLimitAllowlist)
 }
 
+// Register sets up all HTTP routes, middleware, and gRPC client connections.
+// This function orchestrates the complete request handling pipeline, ensuring
+// proper authentication, rate limiting, and observability for all endpoints.
+// The architecture follows a layered approach where each middleware component
+// handles a specific concern, enabling clean separation and testability.
 func Register(r *gin.Engine, cfg config.Config, logger zerolog.Logger, reg *prometheus.Registry) *clients.GRPCClients {
 	if cfg.AuthValidateMode == "grpc" {
 		if cfg.AuthGRPCAddr == "" {

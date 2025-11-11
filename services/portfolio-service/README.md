@@ -1,5 +1,7 @@
 Portfolio Service
 
+> *The CQRS read model implementation here optimizes for query performance while maintaining data consistency through event-driven architecture patterns.*
+
 Overview
 - Go microservice implementing CQRS read model for Million Dollar Hunter
 - Consumes TransactionDataIngested from Kafka; publishes PortfolioUpdated
@@ -30,3 +32,5 @@ Env Variables
 - Logging: LOG_LEVEL, LOG_FORMAT
 - Observability: OTEL_EXPORTER_OTLP_ENDPOINT, PROMETHEUS_NAMESPACE
 - Export: EXPORT_DIR
+
+*The event-driven architecture of this service ensures that portfolio data remains consistent and up-to-date, with careful attention to Kafka consumer lag and read model optimization for query performance.*

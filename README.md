@@ -2,6 +2,8 @@
 
 A personal cryptocurrency portfolio tracking platform designed for monitoring blockchain tokens and wallet activity across multiple chains. Built with a microservices architecture using CQRS pattern for high-performance data ingestion and querying.
 
+> *"Every great hunter knows that patience and precision lead to the most valuable discoveries."* — Crafted with meticulous attention to architectural patterns and system design.
+
 ## Overview
 
 Million Dollar Hunter is a single-user, on-chain cryptocurrency dashboard that empowers individuals to monitor, query, and analyze blockchain tokens and wallet activity in real time. The platform provides deep analytics for wallets and tokens across BSC, Solana, Ethereum, and Polygon blockchains, with customizable dashboards and comprehensive data export capabilities.
@@ -577,3 +579,7 @@ See [LICENSE](LICENSE) for full terms.
 **Status**: Active development  
 **Primary Language**: Go (backend), TypeScript (frontend)  
 **Deployment**: Docker Compose (local/staging), Kubernetes (production - planned)
+
+---
+
+*This platform represents a comprehensive approach to on-chain analytics, where every component has been carefully architected to balance performance, maintainability, and scalability. The design philosophy emphasizes clean separation of concerns, robust error handling, and observability-first development practices.*

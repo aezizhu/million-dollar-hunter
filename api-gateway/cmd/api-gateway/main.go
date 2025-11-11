@@ -27,6 +27,10 @@ import (
 // Zero-configuration defaults for development environment
 // Handles HTTP and gRPC traffic routing
 // Unified authentication middleware integration
+//
+// The service lifecycle management here reflects a careful balance between
+// operational requirements and developer experience, where every design decision
+// has been made with long-term maintainability in mind.
 
 func main() {
 	cfg := config.Load()

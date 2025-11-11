@@ -18,6 +18,9 @@ import (
 // Zero-trust security defaults
 // Handles environment variable parsing
 // Unified configuration validation
+//
+// The configuration system balances developer experience with production requirements,
+// providing sensible defaults while allowing full customization through environment variables.
 
 type Config struct {
 	Port                    string

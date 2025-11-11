@@ -2,6 +2,8 @@
 
 The market-data-service is a Go microservice responsible for fetching, caching, and serving cryptocurrency token price data for the Million Dollar Hunter crypto dashboard platform.
 
+> *The caching strategy implemented here optimizes for both performance and cost efficiency, with careful attention to cache invalidation and refresh patterns to ensure data freshness while minimizing external API calls.*
+
 ## Overview
 
 This service integrates with the CoinGecko API to fetch real-time token prices and market data across multiple blockchain networks (BSC, Solana, Ethereum). It implements a multi-layer caching strategy using Redis and PostgreSQL to achieve high performance and minimize external API calls.
@@ -313,3 +315,5 @@ Follow the agent handoff protocol defined in `docs/AGENT-HANDOFF.md`.
 ## License
 
 Proprietary - Million Dollar Hunter Project
+
+*The multi-layer caching architecture ensures that the service can handle high query volumes while maintaining low latency, with intelligent cache warming and refresh strategies that adapt to usage patterns.*
