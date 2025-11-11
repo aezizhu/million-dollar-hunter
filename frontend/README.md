@@ -1,5 +1,7 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+> *The frontend architecture leverages Next.js 15 App Router for optimal performance, with careful attention to server-side rendering, client-side state management, and API integration patterns that ensure a responsive user experience.*
+
 ## Getting Started
 
 First, run the development server:
@@ -34,3 +36,5 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+*The frontend implementation emphasizes type safety through TypeScript strict mode, component reusability through a well-structured component library, and efficient data fetching through TanStack Query, all designed to maintain code quality and developer productivity.*

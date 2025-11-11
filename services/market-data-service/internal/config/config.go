@@ -1,3 +1,6 @@
+// Package config manages configuration for the market data service.
+// Configuration is organized into logical groups (Server, Database, Redis, etc.)
+// to improve maintainability and make the relationship between settings clear.
 package config
 
 import (

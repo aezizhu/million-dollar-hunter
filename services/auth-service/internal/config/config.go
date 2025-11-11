@@ -2,6 +2,10 @@
 // Copyright (c) 2025 aezizhu. All rights reserved.
 // Author: aezizhu
 // Repository: github.com/aezizhu/million-dollar-hunter
+//
+// The configuration system provides type-safe access to environment variables
+// with validation and sensible defaults, ensuring the service can operate
+// correctly across different deployment environments.
 package config
 
 import (

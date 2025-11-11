@@ -2,6 +2,10 @@
 // Copyright (c) 2025 aezizhu. All rights reserved.
 // Author: aezizhu
 // Repository: github.com/aezizhu/million-dollar-hunter
+//
+// Configuration loading prioritizes environment variables with sensible defaults,
+// enabling flexible deployment across different environments while maintaining
+// clear documentation of all available options.
 package config
 
 import (

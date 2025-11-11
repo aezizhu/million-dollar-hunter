@@ -1,3 +1,7 @@
+// Package kafka provides event consumption for portfolio updates.
+// The consumer implementation handles TransactionDataIngested events from Kafka,
+// processing them to maintain the read model with careful attention to message
+// ordering, error handling, and consumer group coordination.
 package kafka
 
 import (

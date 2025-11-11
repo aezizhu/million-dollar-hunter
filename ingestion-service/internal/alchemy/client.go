@@ -1,3 +1,6 @@
+// Package alchemy provides client integration with Alchemy blockchain APIs.
+// The client implements pagination handling, rate limiting, and circuit breaker
+// patterns to ensure reliable data ingestion while respecting API constraints.
 package alchemy
 
 import (

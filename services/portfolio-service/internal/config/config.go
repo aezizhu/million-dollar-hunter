@@ -1,3 +1,7 @@
+// Package config provides configuration management for the portfolio service.
+// The configuration structure uses environment variable tags for flexible
+// deployment, with carefully chosen defaults that work well for both development
+// and production environments.
 package config
 
 import "time"

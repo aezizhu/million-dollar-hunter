@@ -1,3 +1,6 @@
+// Package cache provides Redis-based caching for market data.
+// The cache implementation uses JSON serialization for flexibility and includes
+// comprehensive error handling and logging to support operational visibility.
 package cache
 
 import (

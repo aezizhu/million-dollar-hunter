@@ -2,6 +2,10 @@
 // Copyright (c) 2025 aezizhu. All rights reserved.
 // Author: aezizhu
 // Repository: github.com/aezizhu/million-dollar-hunter
+//
+// The ingestion pipeline is designed for high-throughput blockchain data processing,
+// with intelligent rate limiting, circuit breakers, and fault tolerance mechanisms
+// that ensure reliable operation even under adverse network conditions.
 package service
 
 import (

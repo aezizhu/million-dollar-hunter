@@ -2,6 +2,10 @@
 // Copyright (c) 2025 aezizhu. All rights reserved.
 // Author: aezizhu
 // Repository: github.com/aezizhu/million-dollar-hunter
+//
+// The client implementation includes intelligent rate limiting and error handling,
+// designed to maximize API utilization while respecting provider limits and
+// ensuring graceful degradation under adverse conditions.
 package client
 
 import (

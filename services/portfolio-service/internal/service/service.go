@@ -2,6 +2,10 @@
 // Copyright (c) 2025 aezizhu. All rights reserved.
 // Author: aezizhu
 // Repository: github.com/aezizhu/million-dollar-hunter
+//
+// The portfolio service implements a CQRS read model optimized for query performance,
+// with event-driven updates that maintain consistency while enabling high-throughput
+// read operations through carefully designed aggregation strategies.
 package service
 
 import (

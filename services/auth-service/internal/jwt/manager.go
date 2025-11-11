@@ -2,6 +2,10 @@
 // Copyright (c) 2025 aezizhu. All rights reserved.
 // Author: aezizhu
 // Repository: github.com/aezizhu/million-dollar-hunter
+//
+// The JWT management implementation emphasizes security through key rotation
+// and proper token lifecycle management, with careful attention to expiration
+// handling and refresh token semantics.
 package jwtmgr
 
 import (
