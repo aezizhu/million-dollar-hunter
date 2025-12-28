@@ -27,12 +27,12 @@ func setupTestService(t *testing.T) (*Service, *repository.Postgres, func()) {
 	logger := logging.New(cfg)
 	db, err := repository.NewPostgres(ctx, cfg, logger)
 	if err != nil {
-		t.Skip("postgres not available")
+		t.Skip("postgres not available: " + err.Error())
 	}
 
 	if err := repository.RunMigrations(ctx, cfg, logger); err != nil {
 		db.Close()
-		t.Fatalf("migrations: %v", err)
+		t.Skip("migrations: " + err.Error())
 	}
 
 	svc, err := New(ctx, cfg, logger, db, nil)

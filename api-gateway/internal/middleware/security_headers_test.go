@@ -20,6 +20,7 @@ func TestSecurityHeaders_Defaults(t *testing.T) {
 	cfg.EnableHSTS = false
 	cfg.CSPPolicy = ""
 	cfg.FrontendURL = "http://example.com"
+	cfg.AuthValidateMode = "local"
 	reg := prometheus.NewRegistry()
 	logger := zerolog.Nop()
 	server.Register(r, cfg, logger, reg)
@@ -53,6 +54,7 @@ func TestSecurityHeaders_HSTSAndCSP(t *testing.T) {
 	cfg.HSTSMaxAge = 15552000
 	cfg.CSPPolicy = "default-src 'self'"
 	cfg.FrontendURL = "http://example.com"
+	cfg.AuthValidateMode = "local"
 	reg := prometheus.NewRegistry()
 	logger := zerolog.Nop()
 	server.Register(r, cfg, logger, reg)
@@ -77,6 +79,7 @@ func TestSecurityHeaders_HSTSGatedByHTTPS(t *testing.T) {
 	cfg.HSTSMaxAge = 15552000
 	cfg.CSPPolicy = ""
 	cfg.FrontendURL = "http://example.com"
+	cfg.AuthValidateMode = "local"
 	reg := prometheus.NewRegistry()
 	logger := zerolog.Nop()
 	server.Register(r, cfg, logger, reg)
@@ -104,6 +107,7 @@ func TestSecurityHeaders_ErrorResponses(t *testing.T) {
 	cfg.HSTSEnabled = false
 	cfg.CSPPolicy = ""
 	cfg.FrontendURL = "http://example.com"
+	cfg.AuthValidateMode = "local"
 	reg := prometheus.NewRegistry()
 	logger := zerolog.Nop()
 	server.Register(r, cfg, logger, reg)

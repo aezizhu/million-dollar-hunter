@@ -20,6 +20,7 @@ func TestCORS_WithCredentials_NoWildcardOrigin(t *testing.T) {
 	cfg := config.Load()
 	allowed := "http://allowed.example"
 	cfg.FrontendURL = allowed
+	cfg.AuthValidateMode = "local"
 	reg := prometheus.NewRegistry()
 	logger := zerolog.Nop()
 	server.Register(r, cfg, logger, reg)
@@ -55,6 +56,7 @@ func TestCORSPreflight_Portfolios(t *testing.T) {
 	r := gin.New()
 	cfg := config.Load()
 	cfg.FrontendURL = "http://example.com"
+	cfg.AuthValidateMode = "local"
 	reg := prometheus.NewRegistry()
 	logger := zerolog.Nop()
 	server.Register(r, cfg, logger, reg)
@@ -87,6 +89,7 @@ func TestCORSPreflight_Wallets(t *testing.T) {
 	r := gin.New()
 	cfg := config.Load()
 	cfg.FrontendURL = "http://example.com"
+	cfg.AuthValidateMode = "local"
 	reg := prometheus.NewRegistry()
 	logger := zerolog.Nop()
 	server.Register(r, cfg, logger, reg)
@@ -110,6 +113,7 @@ func TestCORSPreflight_DisallowedOrigin(t *testing.T) {
 	r := gin.New()
 	cfg := config.Load()
 	cfg.FrontendURL = "http://allowed.example"
+	cfg.AuthValidateMode = "local"
 	reg := prometheus.NewRegistry()
 	logger := zerolog.Nop()
 	server.Register(r, cfg, logger, reg)
