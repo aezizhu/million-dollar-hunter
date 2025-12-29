@@ -18,5 +18,6 @@ RUN adduser -D appuser
 USER appuser
 WORKDIR /home/appuser
 COPY --from=builder /bin/portfolio-service /usr/local/bin/portfolio-service
-ENV GRPC_ADDR=":8081"
+ENV GRPC_ADDR=":8082"
+EXPOSE 8082
 CMD ["/usr/local/bin/portfolio-service"]
