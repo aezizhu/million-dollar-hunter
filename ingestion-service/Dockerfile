@@ -2,6 +2,7 @@
 FROM golang:1.24 as builder
 WORKDIR /workspace
 COPY go.work go.work.sum* ./
+COPY pkg/ ./pkg/
 COPY ingestion-service/ ./ingestion-service/
 COPY services/ ./services/
 COPY api-gateway/ ./api-gateway/

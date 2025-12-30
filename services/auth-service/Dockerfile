@@ -6,6 +6,7 @@ WORKDIR /workspace
 COPY go.work go.work.sum* ./
 
 # Copy all service directories
+COPY pkg/ ./pkg/
 COPY services/ ./services/
 COPY api-gateway/ ./api-gateway/
 COPY ingestion-service/ ./ingestion-service/

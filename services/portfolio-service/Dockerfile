@@ -2,6 +2,7 @@
 FROM golang:1.24-alpine AS builder
 WORKDIR /workspace
 COPY go.work go.work.sum* ./
+COPY pkg/ ./pkg/
 COPY services/ ./services/
 COPY api-gateway/ ./api-gateway/
 COPY ingestion-service/ ./ingestion-service/

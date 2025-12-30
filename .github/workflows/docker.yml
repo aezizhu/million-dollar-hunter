@@ -20,8 +20,8 @@ jobs:
       - name: Build frontend image
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: frontend/Dockerfile
+          context: ./frontend
+          file: ./frontend/Dockerfile
           push: false
           tags: million-hunter/frontend:test
           cache-from: type=gha
