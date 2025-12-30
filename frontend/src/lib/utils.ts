@@ -79,28 +79,21 @@ export function isValidAddress(address: string): boolean {
   return isValidEthAddress(address) || isValidSolanaAddress(address);
 }
 
+const explorerConfig: Record<string, { tx: string; address: string }> = {
+  ethereum: { tx: 'https://etherscan.io/tx/', address: 'https://etherscan.io/address/' },
+  bsc: { tx: 'https://bscscan.com/tx/', address: 'https://bscscan.com/address/' },
+  polygon: { tx: 'https://polygonscan.com/tx/', address: 'https://polygonscan.com/address/' },
+  arbitrum: { tx: 'https://arbiscan.io/tx/', address: 'https://arbiscan.io/address/' },
+  optimism: { tx: 'https://optimistic.etherscan.io/tx/', address: 'https://optimistic.etherscan.io/address/' },
+  solana: { tx: 'https://solscan.io/tx/', address: 'https://solscan.io/account/' },
+};
+
 export function getExplorerTxUrl(txHash: string, chain: string): string {
-  const explorers: Record<string, string> = {
-    ethereum: 'https://etherscan.io/tx/',
-    bsc: 'https://bscscan.com/tx/',
-    polygon: 'https://polygonscan.com/tx/',
-    arbitrum: 'https://arbiscan.io/tx/',
-    optimism: 'https://optimistic.etherscan.io/tx/',
-    solana: 'https://solscan.io/tx/',
-  };
-  const baseUrl = explorers[chain.toLowerCase()] || explorers.ethereum;
+  const baseUrl = (explorerConfig[chain.toLowerCase()] || explorerConfig.ethereum).tx;
   return `${baseUrl}${txHash}`;
 }
 
 export function getExplorerAddressUrl(address: string, chain: string): string {
-  const explorers: Record<string, string> = {
-    ethereum: 'https://etherscan.io/address/',
-    bsc: 'https://bscscan.com/address/',
-    polygon: 'https://polygonscan.com/address/',
-    arbitrum: 'https://arbiscan.io/address/',
-    optimism: 'https://optimistic.etherscan.io/address/',
-    solana: 'https://solscan.io/account/',
-  };
-  const baseUrl = explorers[chain.toLowerCase()] || explorers.ethereum;
+  const baseUrl = (explorerConfig[chain.toLowerCase()] || explorerConfig.ethereum).address;
   return `${baseUrl}${address}`;
 }

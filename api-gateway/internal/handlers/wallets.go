@@ -135,8 +135,16 @@ func GetTransactions(portfolioConn *grpc.ClientConn, logger zerolog.Logger) gin.
 			return
 		}
 
-		page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-		pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "50"))
+		page, pageErr := strconv.Atoi(c.DefaultQuery("page", "1"))
+		pageSize, pageSizeErr := strconv.Atoi(c.DefaultQuery("pageSize", "50"))
+		if pageErr != nil || pageSizeErr != nil {
+			logger.Warn().Str("address", address).Msg("Invalid page or pageSize parameter")
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "validation_error",
+				"message": "page and pageSize must be integers",
+			})
+			return
+		}
 		filterType := c.Query("type")
 
 		if page < 1 {
@@ -204,6 +212,7 @@ func GetTransactions(portfolioConn *grpc.ClientConn, logger zerolog.Logger) gin.
 		for _, tx := range resp.Transactions {
 			txType := tx.Type
 			if txType == "" {
+				logger.Warn().Str("txHash", tx.Hash).Msg("Transaction type from portfolio-service was empty, defaulting to RECEIVE")
 				txType = "RECEIVE"
 			}
 			transactions = append(transactions, gin.H{
@@ -214,7 +223,6 @@ func GetTransactions(portfolioConn *grpc.ClientConn, logger zerolog.Logger) gin.
 				"symbol":    tx.Symbol,
 				"timestamp": time.Unix(tx.Timestamp, 0).Format(time.RFC3339),
 				"type":      txType,
-				"usdValue":  0,
 			})
 		}
 
