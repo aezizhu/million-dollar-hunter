@@ -46,8 +46,8 @@ export default function RegisterPage() {
       router.push('/auth/login?registered=true');
     } else {
       setError(result.error || 'Registration failed');
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   return (

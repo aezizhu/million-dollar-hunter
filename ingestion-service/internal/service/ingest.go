@@ -181,7 +181,13 @@ func (s *Service) worker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case job := <-s.jobch:
-			_ = s.handleJob(ctx, job)
+			if err := s.handleJob(ctx, job); err != nil {
+				s.logger.Error().
+					Err(err).
+					Str("wallet", job.Wallet).
+					Str("chain", job.Chain).
+					Msg("worker job failed")
+			}
 		}
 	}
 }

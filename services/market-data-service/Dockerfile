@@ -26,5 +26,5 @@ COPY --from=builder /app/market-data-service .
 COPY --from=builder /workspace/services/market-data-service/db ./db
 RUN chown -R appuser:appuser /app
 USER appuser
-EXPOSE 50051
+EXPOSE 50052
 CMD ["./market-data-service"]

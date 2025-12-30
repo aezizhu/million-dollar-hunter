@@ -44,7 +44,9 @@ func Login(cfg config.Config) gin.HandlerFunc {
 			}
 		}
 		c.Status(resp.StatusCode)
-		io.Copy(c.Writer, resp.Body)
+		if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+			c.Error(err)
+		}
 	}
 }
 
@@ -72,6 +74,8 @@ func Refresh(cfg config.Config) gin.HandlerFunc {
 			}
 		}
 		c.Status(resp.StatusCode)
-		io.Copy(c.Writer, resp.Body)
+		if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+			c.Error(err)
+		}
 	}
 }

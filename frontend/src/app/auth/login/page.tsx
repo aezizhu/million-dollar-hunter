@@ -34,8 +34,8 @@ export default function LoginPage() {
       router.push('/dashboard');
     } else {
       setError(result.error || 'Login failed');
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   return (
