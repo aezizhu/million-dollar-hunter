@@ -78,3 +78,29 @@ export function isValidSolanaAddress(address: string): boolean {
 export function isValidAddress(address: string): boolean {
   return isValidEthAddress(address) || isValidSolanaAddress(address);
 }
+
+export function getExplorerTxUrl(txHash: string, chain: string): string {
+  const explorers: Record<string, string> = {
+    ethereum: 'https://etherscan.io/tx/',
+    bsc: 'https://bscscan.com/tx/',
+    polygon: 'https://polygonscan.com/tx/',
+    arbitrum: 'https://arbiscan.io/tx/',
+    optimism: 'https://optimistic.etherscan.io/tx/',
+    solana: 'https://solscan.io/tx/',
+  };
+  const baseUrl = explorers[chain.toLowerCase()] || explorers.ethereum;
+  return `${baseUrl}${txHash}`;
+}
+
+export function getExplorerAddressUrl(address: string, chain: string): string {
+  const explorers: Record<string, string> = {
+    ethereum: 'https://etherscan.io/address/',
+    bsc: 'https://bscscan.com/address/',
+    polygon: 'https://polygonscan.com/address/',
+    arbitrum: 'https://arbiscan.io/address/',
+    optimism: 'https://optimistic.etherscan.io/address/',
+    solana: 'https://solscan.io/account/',
+  };
+  const baseUrl = explorers[chain.toLowerCase()] || explorers.ethereum;
+  return `${baseUrl}${address}`;
+}

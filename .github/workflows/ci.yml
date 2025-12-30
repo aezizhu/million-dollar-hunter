@@ -1,0 +1,223 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, 'fix/**', 'feature/**']
+  pull_request:
+    branches: [main, develop]
+
+env:
+  GO_VERSION: '1.24'
+  NODE_VERSION: '20'
+
+jobs:
+  # Frontend CI
+  frontend:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  # API Gateway CI
+  api-gateway:
+    name: API Gateway CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api-gateway
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: api-gateway/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          working-directory: api-gateway
+
+      - name: Run tests
+        run: go test ./... -short -v
+
+      - name: Build
+        run: go build ./...
+
+  # Auth Service CI
+  auth-service:
+    name: Auth Service CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/auth-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/auth-service/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          working-directory: services/auth-service
+
+      - name: Run tests
+        run: go test ./... -short -v
+
+      - name: Build
+        run: go build ./...
+
+  # Portfolio Service CI
+  portfolio-service:
+    name: Portfolio Service CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/portfolio-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/portfolio-service/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          working-directory: services/portfolio-service
+
+      - name: Run tests
+        run: go test ./... -short -v
+
+      - name: Build
+        run: go build ./...
+
+  # Market Data Service CI
+  market-data-service:
+    name: Market Data Service CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/market-data-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: services/market-data-service/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          working-directory: services/market-data-service
+
+      - name: Run tests
+        run: go test ./... -short -v
+
+      - name: Build
+        run: go build ./...
+
+  # Ingestion Service CI
+  ingestion-service:
+    name: Ingestion Service CI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ingestion-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: ingestion-service/go.sum
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          working-directory: ingestion-service
+
+      - name: Run tests
+        run: go test ./... -short -v
+
+      - name: Build
+        run: go build ./...
+
+  # Final status check
+  ci-complete:
+    name: CI Complete
+    runs-on: ubuntu-latest
+    needs:
+      - frontend
+      - api-gateway
+      - auth-service
+      - portfolio-service
+      - market-data-service
+      - ingestion-service
+    steps:
+      - name: All CI checks passed
+        run: echo "All CI checks passed successfully!"

@@ -43,11 +43,13 @@ export default function RegisterPage() {
     const result = await register({ email, password });
 
     if (result.success) {
+      // Don't reset loading state - let the component unmount during navigation
+      // This prevents the race condition where the button is re-enabled before navigation completes
       router.push('/auth/login?registered=true');
     } else {
       setError(result.error || 'Registration failed');
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

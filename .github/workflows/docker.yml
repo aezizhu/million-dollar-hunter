@@ -1,0 +1,142 @@
+name: Docker Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-frontend:
+    name: Build Frontend Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: frontend/Dockerfile
+          push: false
+          tags: million-hunter/frontend:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-api-gateway:
+    name: Build API Gateway Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API gateway image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: api-gateway/Dockerfile
+          push: false
+          tags: million-hunter/api-gateway:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-auth-service:
+    name: Build Auth Service Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build auth service image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/auth-service/Dockerfile
+          push: false
+          tags: million-hunter/auth-service:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-portfolio-service:
+    name: Build Portfolio Service Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build portfolio service image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/portfolio-service/Dockerfile
+          push: false
+          tags: million-hunter/portfolio-service:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-market-data-service:
+    name: Build Market Data Service Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build market data service image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/market-data-service/Dockerfile
+          push: false
+          tags: million-hunter/market-data-service:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  build-ingestion-service:
+    name: Build Ingestion Service Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ingestion service image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ingestion-service/Dockerfile
+          push: false
+          tags: million-hunter/ingestion-service:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  docker-complete:
+    name: Docker Build Complete
+    runs-on: ubuntu-latest
+    needs:
+      - build-frontend
+      - build-api-gateway
+      - build-auth-service
+      - build-portfolio-service
+      - build-market-data-service
+      - build-ingestion-service
+    steps:
+      - name: All Docker builds passed
+        run: echo "All Docker builds completed successfully!"

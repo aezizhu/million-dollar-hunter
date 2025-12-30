@@ -31,11 +31,13 @@ export default function LoginPage() {
     const result = await login({ email, password });
 
     if (result.success) {
+      // Don't reset loading state - let the component unmount during navigation
+      // This prevents the race condition where the button is re-enabled before navigation completes
       router.push('/dashboard');
     } else {
       setError(result.error || 'Login failed');
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

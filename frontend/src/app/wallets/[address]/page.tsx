@@ -176,6 +176,7 @@ export default function WalletPage({ params }: PageProps) {
                   page={txPage - 1}
                   pageSize={txPageSize}
                   total={txData.total}
+                  chain={chain}
                   onPageChange={(p) => setTxPage(p + 1)}
                   onPageSizeChange={setTxPageSize}
                 />
