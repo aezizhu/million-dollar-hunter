@@ -14,14 +14,15 @@ import {
   Chip,
   Link as MuiLink,
 } from '@mui/material';
-import { formatCurrency, formatDate, formatAddress } from '@/lib/utils';
-import type { Transaction } from '@/types';
+import { formatCurrency, formatDate, formatAddress, getExplorerTxUrl } from '@/lib/utils';
+import type { Transaction, Chain } from '@/types';
 
 interface TransactionHistoryProps {
   items: Transaction[];
   page: number;
   pageSize: number;
   total: number;
+  chain: Chain;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
 }
@@ -40,6 +41,7 @@ export function TransactionHistory({
   page,
   pageSize,
   total,
+  chain,
   onPageChange,
   onPageSizeChange,
 }: TransactionHistoryProps) {
@@ -119,7 +121,7 @@ export function TransactionHistory({
                 </TableCell>
                 <TableCell>
                   <MuiLink
-                    href={`#`}
+                    href={getExplorerTxUrl(tx.txHash, chain)}
                     target="_blank"
                     rel="noopener noreferrer"
                     sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}
